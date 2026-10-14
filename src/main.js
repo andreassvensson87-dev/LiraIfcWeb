@@ -78,7 +78,6 @@ $("#app").innerHTML = `
       <div class="view-cube" aria-label="Standardvyer"><button data-action="view-top" title="Ovanifrån">Topp</button><div><button data-action="view-front">Fram</button><button data-action="view-right">Höger</button></div><button class="cube-iso" data-action="view-iso" title="Isometrisk vy">${icon("models")}</button></div>
       <div class="canvas-tools">${small("fit", "Passa modell · F", "fit")}${small("zoom-in", "Zooma in", "plus")}${small("zoom-out", "Zooma ut", "minus")}${small("fullscreen", "Helskärm", "expand")}</div>
       <div id="object-menu" class="object-menu" role="menu" aria-label="Markerade objekt" hidden></div>
-      <div id="hover-label" class="hover-label" hidden></div>
       <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna en IFC-modell eller släpp flera filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna IFC</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
       <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp dina IFC-filer här</strong><span>Öppna flera modeller tillsammans</span></div>
       <div id="loading" class="loading-card" role="status" hidden><span class="spinner"></span><div><strong id="loading-name"></strong><span id="loading-status">Läser modell…</span></div></div>
@@ -115,16 +114,6 @@ try {
   viewer = new Viewer($("#viewport"), {
     onSelect: selectObject,
     onContextMenu: openObjectMenu,
-    onHover: (object, event) => {
-      const label = $("#hover-label");
-      label.hidden = !object;
-      if (object && event) {
-        label.textContent = object.name;
-        const rect = $("#viewport").getBoundingClientRect();
-        label.style.left = `${Math.min(rect.width - 230, Math.max(5, event.clientX - rect.left + 15))}px`;
-        label.style.top = `${Math.min(rect.height - 40, event.clientY - rect.top + 16)}px`;
-      }
-    },
     onMeasureStart: () => status("Välj andra punkten. Esc avbryter."),
     onMeasure: (distance) => {
       status(
@@ -264,7 +253,7 @@ function openObjectMenu(object, event) {
   if (object && !state.selected.has(object.key)) selectObject(object);
   if (!state.selected.size) return;
   const menu = $("#object-menu");
-  $("#hover-label").hidden = true;
+
   menu.innerHTML =
     `<div class="object-menu-title">${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}</div>` +
     [
@@ -874,6 +863,15 @@ const actions = {
         .catch(() => notify("Helskärm stöds inte i den här webbläsaren."));
   },
 };
+$("#panel-content").addEventListener("contextmenu", (event) => {
+  const row = event.target.closest(".object-row");
+  const key = row?.querySelector('[data-action="select-object"]')?.dataset.key;
+  if (!key) return;
+  const object = allObjects().find((object) => object.key === key);
+  if (!object) return;
+  event.preventDefault();
+  openObjectMenu(object, event);
+});
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
   if (tab) setTab(tab.dataset.tab);
@@ -1021,7 +1019,7 @@ document.addEventListener("keydown", (e) => {
     viewer.setTool("select");
     toolState();
     renderPanel();
-    $("#hover-label").hidden = true;
+
     return;
   }
   if (

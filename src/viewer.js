@@ -151,7 +151,7 @@ export class Viewer {
       if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
         down.moved = true;
       if (e.buttons) return;
-      const hit = this.pick(e);
+      const hit = this.tool === "measure" ? this.pick(e) : null;
       if (this.tool === "measure" && hit) {
         const point = this.snapPoint(hit);
         this.snapMarker.position.copy(point);
@@ -165,11 +165,9 @@ export class Viewer {
         this.snapMarker.visible = false;
         this.invalidate();
       }
-      this.callbacks.onHover(hit?.object, e);
     });
     canvas.addEventListener("pointerleave", () => {
       this.snapMarker.visible = false;
-      this.callbacks.onHover(null);
       this.invalidate();
     });
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());

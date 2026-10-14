@@ -411,20 +411,6 @@ h2 {
   z-index: 3;
   background: #ffffffd9;
 }
-.hover-label {
-  position: absolute;
-  z-index: 5;
-  pointer-events: none;
-  background: #203c45ed;
-  color: white;
-  font-size: 10px;
-  padding: 6px 9px;
-  border-radius: 4px;
-  max-width: 230px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .inspector {
   background: white;
   border-left: 1px solid var(--border);
