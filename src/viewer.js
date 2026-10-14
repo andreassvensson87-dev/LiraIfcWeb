@@ -2,10 +2,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { selectInRectangle } from "./rectangle-selection.js";
 import { installRectangleSelection } from "./rectangle-input.js";
+import { ViewCube } from "./view-cube.js";
+import { ViewTransition, viewOrientation } from "./view-navigation.js";
 import { SectionCaps } from "./section-caps.js";
 import {
   configureNavigation,
   installInputNavigation,
+  rotateAroundPoint,
 } from "./input-navigation.js";
 import {
   buildBatches,
@@ -19,6 +22,7 @@ export class Viewer {
   constructor(host, callbacks) {
     this.host = host;
     this.callbacks = callbacks;
+    this.viewTransition = new ViewTransition();
     this.models = [];
     this.batches = [];
     this.hidden = new Set();
@@ -70,6 +74,15 @@ export class Viewer {
     this.camera.position.set(-27, 20, -28);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     configureNavigation(this.controls);
+    host.addEventListener(
+      "pointerdown",
+      () => this.viewTransition.cancel(),
+      true,
+    );
+    host.addEventListener("wheel", () => this.viewTransition.cancel(), {
+      capture: true,
+      passive: true,
+    });
     this.inputNavigation = installInputNavigation(
       host,
       this.renderer.domElement,
@@ -178,6 +191,7 @@ export class Viewer {
       canvas,
       enabled: () => this.tool === "select" && this.models.length > 0,
       onStart: () => {
+        this.viewTransition.cancel();
         this.inputNavigation.cancel();
         rectangleControlsEnabled = this.controls.enabled;
         this.controls.enabled = false;
@@ -209,6 +223,23 @@ export class Viewer {
         "3D-grafiken avbröts. Ladda om sidan för att återställa viewern.",
       );
     });
+    this.viewCube = new ViewCube(host, {
+      select: (direction) => this.navigateView(direction),
+      roll: (direction) => this.rollView(direction),
+      home: () => this.navigateView([1, 0.7, -1]),
+      dragStart: () => this.prepareViewNavigation(),
+      drag: (dx, dy) => {
+        rotateAroundPoint(
+          this.camera,
+          this.controls.target,
+          this.controls.target.clone(),
+          dx,
+          dy,
+          300,
+        );
+        this.invalidate();
+      },
+    });
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(host);
     this.resize();
@@ -216,12 +247,17 @@ export class Viewer {
   }
   invalidate() {
     if (this.frame != null) return;
-    this.frame = requestAnimationFrame(() => {
+    this.frame = requestAnimationFrame((now) => {
       this.frame = null;
-      if (!this.rectangleSelection?.active) {
+      if (this.viewTransition.active) {
+        this.viewTransition.update(now);
+        if (this.viewTransition.active) this.invalidate();
+        else this.controls.update();
+      } else if (!this.rectangleSelection?.active) {
         const orbiting = this.inputNavigation.update();
         if (this.controls.update() || orbiting) this.invalidate();
       }
+      this.viewCube?.update(this.camera);
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, this.width, this.height);
       this.renderer.render(this.scene, this.camera);
@@ -336,6 +372,7 @@ export class Viewer {
     this.recolor();
   }
   fit(bounds = null) {
+    this.viewTransition.cancel();
     this.inputNavigation.cancel();
     if (!bounds) {
       bounds = new THREE.Box3();
@@ -386,6 +423,7 @@ export class Viewer {
     this.invalidate();
   }
   setProjection(mode) {
+    this.viewTransition.cancel();
     this.inputNavigation.cancel();
     const previous = this.camera,
       next = mode === "orthographic" ? this.orthographic : this.perspective;
@@ -417,6 +455,55 @@ export class Viewer {
     this.controls.update();
     this.invalidate();
   }
+  prepareViewNavigation() {
+    this.rectangleSelection.cancel();
+    this.inputNavigation.cancel();
+    this.viewTransition.cancel();
+    const damping = this.controls.enableDamping;
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = damping;
+  }
+  navigateView(direction) {
+    this.prepareViewNavigation();
+    const { quaternion, up } = viewOrientation(direction);
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    this.viewTransition.start(
+      this.camera,
+      this.controls.target,
+      quaternion,
+      up,
+      performance.now(),
+      reduced ? 1 : 320,
+    );
+    this.invalidate();
+  }
+  rollView(direction) {
+    this.prepareViewNavigation();
+    const axis = new THREE.Vector3(0, 0, 1).applyQuaternion(
+      this.camera.quaternion,
+    );
+    const rotation = new THREE.Quaternion().setFromAxisAngle(
+      axis,
+      (direction * -Math.PI) / 2,
+    );
+    const quaternion = this.camera.quaternion.clone().premultiply(rotation);
+    const up = this.camera.up.clone().applyQuaternion(rotation);
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    this.viewTransition.start(
+      this.camera,
+      this.controls.target,
+      quaternion,
+      up,
+      performance.now(),
+      reduced ? 1 : 320,
+    );
+    this.invalidate();
+  }
   standardView(name) {
     const directions = {
       iso: [-1, 0.4, -1],
@@ -440,6 +527,7 @@ export class Viewer {
     this.fit();
   }
   zoom(factor) {
+    this.viewTransition.cancel();
     if (this.camera.isOrthographicCamera) {
       this.camera.zoom *= factor;
       this.camera.updateProjectionMatrix();
@@ -573,6 +661,7 @@ export class Viewer {
     return nearest;
   }
   setTool(tool) {
+    this.viewTransition.cancel();
     this.rectangleSelection.cancel();
     this.tool = tool;
     this.measureStart = null;
@@ -626,6 +715,7 @@ export class Viewer {
   cameraSnapshot() {
     return {
       position: this.camera.position.toArray(),
+      up: this.camera.up.toArray(),
       target: this.controls.target.toArray(),
       projection: this.camera.isOrthographicCamera
         ? "orthographic"
@@ -637,8 +727,10 @@ export class Viewer {
     };
   }
   restoreCamera(snapshot) {
+    this.viewTransition.cancel();
     this.inputNavigation.cancel();
     this.setProjection(snapshot.projection);
+    this.camera.up.fromArray(snapshot.up || [0, 1, 0]);
     this.camera.position.fromArray(snapshot.position);
     this.controls.target.fromArray(snapshot.target);
     this.orthoSpan = snapshot.span;

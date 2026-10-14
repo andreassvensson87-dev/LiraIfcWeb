@@ -101,3 +101,9 @@ Urvalet använder objektens verkliga trianglar och snittytor, inklusive öppning
 ## Installerad app och ikoner
 
 Appmanifestet anger LiraIFC som namn, fristående appfönster och relativ start-URL/scope för GitHub Pages och lokal preview. Windows installationsikoner (32, 44, 48, 64, 128, 192, 256 och 512 px), favicon och Apple-ikonen är exporter från samma public/lira-icon.svg som används i toppfältet. Ingen separat eller alternativ logga används för installationen. Äldre installationer kan behöva läsa in uppdaterad appmetadata för att få rätt ikon.
+
+## Vykub
+
+En kompakt vykub (120 px bred) uppe till höger följer kamerans riktning och vridning. Den visas med 30 % opacitet i viloläge och full opacitet vid hover, tangentbordsfokus eller dragning, med en mjuk övergång. Diskreta etiketter med normal textvikt ligger i sidornas plan och projiceras med kuben, så att de ser tryckta på sidorna ut. Sex sidor ger raka vyer (Topp, Botten, Fram, Bak, Höger, Vänster), tolv fasade kanter ger tvåaxliga diagonala vyer och åtta hörn ger isometriska vyer. Träffytor markeras grönt vid hover och kan aktiveras med Tab följt av Enter eller mellanslag.
+
+Vänsterdrag på kuben roterar kameran runt befintligt rotationscentrum. Pilarna vrider vyn 90° runt siktlinjen och hemknappen återgår till standardvy utan passning eller automatisk zoom. Perspektiv/ortografisk projektion, zoom, kameraavstånd och målpunkt behålls när riktningen ändras. Vybyten animeras i 320 ms; inställningen för reducerad rörelse respekteras. Nya musgester avbryter pågående övergång, och sparade vyer inkluderar kamerans upp-riktning så att vridna vyer kan återställas. Modellmarkering och navigationsgester på huvudcanvas behåller sin funktion.

@@ -35,6 +35,7 @@ GitHub Actions kör tester och produktionsbygge vid ändringar i `main` och publ
 - Objektval, flerval, fokusering, isolering och IFC-egenskaper.
 - Rektangelmarkering med vänsterdrag: blå ruta från vänster till höger väljer helt inneslutna objekt, grön ruta från höger till vänster väljer berörda objekt. Shift lägger till; Esc avbryter. Snitt och synlighet respekteras.
 - Perspektiv, ortografiska vyer, färgsättning och valbara kantlinjer.
+- Vykub som följer kameran: klickbara sidor, kanter och hörn, dragrotation, 90°-pilar och hemknapp. Mjuka vyövergångar behåller zoom och rotationscentrum.
 - Navigation som i LiraStructureWeb: vänsterklick väljer, mitten/högerdrag panorerar, Shift/Ctrl/Cmd + mitten/högerdrag roterar runt träffad modellpunkt och scroll zoomar mot pekaren.
 - Mus/styrplatta väljs i inställningsfönstret. Styrplattans tvåfingerscroll panorerar och nypning zoomar.
 - Inställningsknappen i toppfältet öppnar navigationsinställningar för zoomhastighet 25–400 %, inverterad scrollzoom och dämpad orbit. De sparas lokalt och gäller direkt; zoomhastigheten kan återställas till 100 %.

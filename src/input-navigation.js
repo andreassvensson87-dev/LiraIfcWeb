@@ -84,6 +84,7 @@ export function installInputNavigation(
   const start = (event) => {
     pending.set(0, 0);
     if (
+      event.target.closest?.(".view-cube") ||
       event.pointerType === "touch" ||
       ![1, 2].includes(event.button) ||
       !(event.shiftKey || event.ctrlKey || event.metaKey)

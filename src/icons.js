@@ -1,4 +1,6 @@
 const paths = {
+  "rotate-left": '<path d="M4 10a8 8 0 1 1 3 10M4 4v6h6"/>',
+  "rotate-right": '<path d="M20 10a8 8 0 1 0-3 10M20 4v6h-6"/>',
   folder: '<path d="M3 7h7l2 2h9v11H3z"/><path d="M3 7V4h7l2 3h9v2"/>',
   models: '<path d="m12 2 8 4v9l-8 5-8-5V6z"/><path d="m4 6 8 5 8-5M12 11v9"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',

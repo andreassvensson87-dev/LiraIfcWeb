@@ -77,7 +77,6 @@ $("#app").innerHTML = `
   </nav>
   <main class="workbench">
     <section id="viewport" aria-label="Modellvy">
-      <div class="view-cube" aria-label="Standardvyer"><button data-action="view-top" title="Ovanifrån">Topp</button><div><button data-action="view-front">Fram</button><button data-action="view-right">Höger</button></div><button class="cube-iso" data-action="view-iso" title="Isometrisk vy">${icon("models")}</button></div>
       <div id="object-menu" class="object-menu" role="menu" aria-label="Markerade objekt" hidden></div>
       <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna en IFC-modell eller släpp flera filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna IFC</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
       <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp dina IFC-filer här</strong><span>Öppna flera modeller tillsammans</span></div>
