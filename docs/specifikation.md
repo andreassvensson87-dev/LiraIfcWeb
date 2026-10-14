@@ -33,7 +33,7 @@ Stilreferenser är LiraStructureWebs `src/lira-shell.css`, `src/ui/workspace.css
 | Navigering | LiraStructureWebs musgester: mitten/högerdrag panorerar, Shift/Ctrl/Cmd + mitten/högerdrag ger orbit runt träffad modellpunkt och scroll zoomar mot pekaren. Vänsterklick väljer objekt. Mus/styrplatta väljs i inställningsfönstret |
 | Navigationsinställningar | Zoomhastighet 25–400 % i steg om 5 %, återställning till 100 %, inverterad scrollzoom samt orbit-dämpning av/på. Sparas lokalt och gäller direkt. Nypning påverkas inte av inverteringen |
 | Projektion | Perspektiv och ortografisk projektion; topp-, fram-, sido- och isometrisk vy |
-| Urval | Klick, flerval med Shift/Ctrl/Cmd + klick. Högerklick i modellen eller på en objektrad i modellträdet öppnar Info, Fokusera, Göm och Isolera för hela urvalet. Högerdrag fortsätter att panorera. Markering behåller aktuell inspektorflik; Info öppnar egenskaper. Ingen hovertext vid pekaren, flytande objektpanel eller rubrik över modellvyn |
+| Urval | Klick, flerval med Shift/Ctrl/Cmd + klick. Högerklick i modellen eller på en objektrad i modellträdet öppnar Info, Fokusera, Visa, Göm och Isolera för hela urvalet. Högerdrag fortsätter att panorera. Markering behåller aktuell inspektorflik; Info öppnar egenskaper. Klick på grennamnet markerar grenen; Shift + klick lägger till eller tar bort grenar. Högerklick på en markerad gren gäller unionen av alla markerade grenar utan dubbla objekt, även för överlappande system och zoner. Trädets pil fäller ut eller ihop grenen. Högerklick på våning, gren eller modellrot markerar alla grenens objekt, oberoende av sökfilter, och erbjuder Fokusera, Visa, Göm och Isolera. Isolera återvisar även tidigare dolda objekt i grenen. Ingen hovertext vid pekaren, flytande objektpanel eller rubrik över modellvyn |
 | Egenskaper | IFC-identitet, attribut, property sets, material och typdefinitioner när filen innehåller dem |
 | Utseende | Originalfärger, disciplinfärger, färg efter IFC-klass, kantlinjer och rutnät |
 | Snitt | Snittplan i X/Y/Z med läge och vänd riktning; snittbox med sex gränser. Slutna, opaka volymer får fyllda och skrafferade snittytor |
@@ -83,3 +83,9 @@ IFC2x3 och IFC4 är målformat. Kompatibiliteten beror på den importerade filen
 ![Modeller i högerinspektorn](design/modellvisare-koncept-v2.png)
 
 Det senaste bildförslaget fastställer placeringen av modellträdet och Liras formspråk. Samarbetsknappar som syns i den tidigare konceptbilden ingår inte i implementationen.
+
+## Appuppdateringar
+
+Toppfältets gröna Uppdatera appen visas när versionskontrollen hittar en ny publicerad version. Kontrollen görs vid start, när appen återfår fokus och var 15:e minut. Användaren startar uppdateringen med knappen; inga automatiska omladdningar. En pågående IFC-import måste bli klar först. Kamera, snitt, synlighet, markering och utseende återställs efter omladdningen; modeller och sparade vyer finns kvar i lokal lagring.
+
+Visa i objekt- och grenmenyn återvisar hela markeringen, även under isolering. Om modellen var släckt visas bara markerade objekt eller grenar; modellens övriga objekt förblir dolda.

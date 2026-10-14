@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import "./style.css";
+import { watchAppUpdate } from "./app-update.js";
 import { icon } from "./icons.js";
 import { Viewer } from "./viewer.js";
 import { createDemoModels } from "./demo.js";
@@ -41,6 +42,7 @@ const settings = readSettings();
 const state = {
   models: [],
   selected: new Set(),
+  selectedBranches: new Map(),
   hidden: new Set(),
   isolated: null,
   tab: "models",
@@ -64,7 +66,7 @@ $("#app").innerHTML = `
   <header class="header">
     <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="LiraIFC"><img src="${import.meta.env.BASE_URL}lira-icon.svg" alt=""/><strong>Lira<span>IFC</span></strong></a>
     <div class="header-divider"></div><span class="workspace-title">Modellgranskning</span><span class="viewer-badge">VIEWER</span>
-    <div class="header-right"><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna IFC</button></div>
+    <div class="header-right"><button id="app-update" class="lira-update" title="En ny version finns tillgänglig" hidden>Uppdatera appen</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna IFC</button></div>
   </header>
   <nav class="ribbon" aria-label="Modellverktyg">
     <div class="ribbon-group"><div class="commands">${command("open", "Öppna IFC", "folder")}${command("demo", "Demomodell", "models")}</div><span class="group-label">Modell</span></div>
@@ -249,18 +251,55 @@ function refresh() {
 function closeObjectMenu() {
   $("#object-menu").hidden = true;
 }
-function openObjectMenu(object, event) {
+function branchKey(model, node = null) {
+  return JSON.stringify([model.id, state.grouping, node?.id || null]);
+}
+function branchFromSummary(summary) {
+  const visibility = summary?.querySelector(".visibility[data-model]");
+  if (!visibility) return null;
+  const model = state.models.find(
+    (model) => model.id === visibility.dataset.model,
+  );
+  const node = visibility.dataset.node
+    ? model?.trees[state.grouping].nodes.get(visibility.dataset.node)
+    : null;
+  return model && (!visibility.dataset.node || node) ? { model, node } : null;
+}
+function selectBranch(branch, additive = false) {
+  const key = branchKey(branch.model, branch.node);
+  if (!additive) state.selectedBranches.clear();
+  if (additive && state.selectedBranches.has(key))
+    state.selectedBranches.delete(key);
+  else state.selectedBranches.set(key, branch);
+  // Recompute the union so removing a parent or overlapping group keeps other branches selected.
+  state.selected = new Set(
+    [...state.selectedBranches.values()].flatMap(({ model, node }) =>
+      (node ? node.members : model.objects).map((object) => object.key),
+    ),
+  );
+  refresh();
+  status(
+    `${state.selectedBranches.size} grenar markerade · ${state.selected.size} objekt`,
+  );
+}
+function openObjectMenu(object, event, branch = null) {
+  if (
+    branch &&
+    !state.selectedBranches.has(branchKey(branch.model, branch.node))
+  )
+    selectBranch(branch);
   if (object && !state.selected.has(object.key)) selectObject(object);
   if (!state.selected.size) return;
   const menu = $("#object-menu");
 
   menu.innerHTML =
-    `<div class="object-menu-title">${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}</div>` +
+    `<div class="object-menu-title">${branch ? `${state.selectedBranches.size > 1 ? `${state.selectedBranches.size} grenar markerade` : esc(branch.node?.name || branch.model.name)}<br/>` : ""}${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}</div>` +
     [
-      ["info", "Info", "properties"],
+      ...(!branch ? [["info", "Info", "properties"]] : []),
       ["focus-selection", "Fokusera", "fit"],
+      ["show-selection", "Visa", "eye"],
       ["hide", "Göm", "hide"],
-      ["isolate", "Isolera", "isolate"],
+      [branch ? "isolate-branch" : "isolate", "Isolera", "isolate"],
     ]
       .map(
         ([action, label, glyph]) =>
@@ -303,6 +342,7 @@ document.addEventListener(
 );
 window.addEventListener("resize", closeObjectMenu);
 function selectObject(object, additive = false) {
+  state.selectedBranches.clear();
   if (!additive) state.selected.clear();
   if (object) {
     if (additive && state.selected.has(object.key))
@@ -376,7 +416,7 @@ function renderTreeNode(model, node) {
     return "";
   const objects = node.objects.filter((o) => match(o));
   const open = state.query || state.type || state.expanded.has(node.id);
-  return `<details class="level-tree" data-tree="${esc(node.id)}" ${open ? "open" : ""}><summary>${icon("folder")}<span class="branch-name" title="${esc(node.name)}${node.type ? ` · ${esc(node.type)}` : ""}">${esc(node.name)}</span>${visibilityButton(model, node.members, node)}<small>${matches.length}</small></summary>${node.children.map((child) => renderTreeNode(model, child)).join("")}${objects.slice(0, state.limit).map(objectRow).join("")}${objects.length > state.limit ? '<button class="text-button" data-action="more-results">Visa fler objekt</button>' : ""}</details>`;
+  return `<details class="level-tree" data-tree="${esc(node.id)}" ${open ? "open" : ""}><summary class="${state.selectedBranches.has(branchKey(model, node)) ? "selected-branch" : ""}">${icon("folder")}<span class="branch-name" title="${esc(node.name)}${node.type ? ` · ${esc(node.type)}` : ""}">${esc(node.name)}</span>${visibilityButton(model, node.members, node)}<small>${matches.length}</small></summary>${node.children.map((child) => renderTreeNode(model, child)).join("")}${objects.slice(0, state.limit).map(objectRow).join("")}${objects.length > state.limit ? '<button class="text-button" data-action="more-results">Visa fler objekt</button>' : ""}</details>`;
 }
 function modelsPanel() {
   const types = [...new Set(allObjects().map((o) => o.ifcClass))].sort();
@@ -401,7 +441,7 @@ function modelsPanel() {
         ? `<div class="results-label">${treeSearchCount().toLocaleString("sv")} träffar</div>`
         : ""
     }
-    <div class="model-tree">${state.models.map((model) => `<details data-tree="${model.id}" ${queryActive || state.expanded.has(model.id) ? "open" : ""}><summary class="model-root">${icon("folder")}<span class="model-filename" title="${esc(model.name)} · ${model.objects.length.toLocaleString("sv")} objekt · ${esc(model.schema)}">${esc(model.name)}</span>${visibilityButton(model, model.objects)}${small("remove-model", `Ta bort ${model.name}`, "close", `data-model="${model.id}"`)}</summary>${model.trees[state.grouping].roots.map((node) => renderTreeNode(model, node)).join("")}${model.groupWarning && ["systems", "zones"].includes(state.grouping) ? `<p class="muted">${esc(model.groupWarning)}</p>` : ""}</details>`).join("")}</div>
+    <div class="model-tree">${state.models.map((model) => `<details data-tree="${model.id}" ${queryActive || state.expanded.has(model.id) ? "open" : ""}><summary class="model-root ${state.selectedBranches.has(branchKey(model)) ? "selected-branch" : ""}">${icon("folder")}<span class="model-filename" title="${esc(model.name)} · ${model.objects.length.toLocaleString("sv")} objekt · ${esc(model.schema)}">${esc(model.name)}</span>${visibilityButton(model, model.objects)}${small("remove-model", `Ta bort ${model.name}`, "close", `data-model="${model.id}"`)}</summary>${model.trees[state.grouping].roots.map((node) => renderTreeNode(model, node)).join("")}${model.groupWarning && ["systems", "zones"].includes(state.grouping) ? `<p class="muted">${esc(model.groupWarning)}</p>` : ""}</details>`).join("")}</div>
     <div class="panel-note">${icon("properties")}<span>${state.models.some((model) => model.demo) ? "Demomodell · genererad geometri för att prova viewern." : "IFC-filer bearbetas och sparas lokalt i denna webbläsare."}</span></div>`;
 }
 function objectRow(o) {
@@ -517,6 +557,8 @@ async function removeModel(model, save = true) {
   model.worker?.terminate();
   viewer.removeModel(model);
   state.models = state.models.filter((m) => m !== model);
+  for (const [key, branch] of state.selectedBranches)
+    if (branch.model === model) state.selectedBranches.delete(key);
   for (const o of model.objects) {
     state.selected.delete(o.key);
     state.hidden.delete(o.key);
@@ -688,9 +730,33 @@ const actions = {
       status("Markeringen isolerad · Visa alla återställer modellen");
     }
   },
+  "show-selection": () => {
+    selectedObjects().forEach((object) => {
+      const model = modelFor(object);
+      // Turning on a hidden model must not reveal its other hidden branches.
+      if (!model.visible) {
+        model.objects.forEach((member) => state.hidden.add(member.key));
+        model.visible = true;
+      }
+      state.hidden.delete(object.key);
+      state.isolated?.add(object.key);
+    });
+    $("#level-filter").value = "";
+    refresh();
+    status("Markeringen visas");
+  },
+  "isolate-branch": () => {
+    // A branch may contain previously hidden objects or belong to a hidden model.
+    selectedObjects().forEach((object) => {
+      state.hidden.delete(object.key);
+      modelFor(object).visible = true;
+    });
+    actions.isolate();
+  },
   hide: () => {
     state.selected.forEach((key) => state.hidden.add(key));
     state.selected.clear();
+    state.selectedBranches.clear();
     refresh();
     status("Markeringen dold");
   },
@@ -866,11 +932,29 @@ const actions = {
 $("#panel-content").addEventListener("contextmenu", (event) => {
   const row = event.target.closest(".object-row");
   const key = row?.querySelector('[data-action="select-object"]')?.dataset.key;
-  if (!key) return;
-  const object = allObjects().find((object) => object.key === key);
-  if (!object) return;
+  if (key) {
+    const object = allObjects().find((object) => object.key === key);
+    if (!object) return;
+    event.preventDefault();
+    openObjectMenu(object, event);
+    return;
+  }
+  const summary = event.target.closest(".model-tree summary");
+  const branch = branchFromSummary(summary);
+  if (!branch) return;
   event.preventDefault();
-  openObjectMenu(object, event);
+  openObjectMenu(null, event, branch);
+});
+$("#panel-content").addEventListener("click", (event) => {
+  const summary = event.target.closest(".model-tree summary");
+  if (!summary || event.target.closest("button")) return;
+  // Leave the disclosure arrow available for expanding and collapsing the tree.
+  if (!event.shiftKey && !event.target.closest(".branch-name, .model-filename"))
+    return;
+  const branch = branchFromSummary(summary);
+  if (!branch) return;
+  event.preventDefault();
+  selectBranch(branch, event.shiftKey);
 });
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
@@ -958,6 +1042,7 @@ document.addEventListener("change", (e) => {
     );
   }
   if (e.target.id === "tree-grouping") {
+    state.selectedBranches.clear();
     state.grouping = e.target.value;
     state.limit = 150;
     renderPanel();
@@ -1079,6 +1164,7 @@ async function start() {
     state.loading = false;
     $("#loading").hidden = true;
   } else if (!settings.initialized || settings.demo) await showDemo();
+  restoreUpdateView();
   refresh();
   status(
     state.models.some((m) => m.demo)
@@ -1086,4 +1172,91 @@ async function start() {
       : "Mitten/högerdra: panorera · Shift + dra: orbit · Scrolla: zoom",
   );
 }
+const updateSnapshotKey = "lira-ifc-update-view";
+function restoreUpdateView() {
+  try {
+    const saved = sessionStorage.getItem(updateSnapshotKey);
+    sessionStorage.removeItem(updateSnapshotKey);
+    if (!saved) return;
+    const view = JSON.parse(saved);
+    if (!canRestoreView(view, state.models)) return;
+    state.models.forEach((model) => {
+      model.visible = view.visibility[model.id] ?? false;
+    });
+    state.hidden = new Set(view.hidden);
+    state.isolated = view.isolated ? new Set(view.isolated) : null;
+    const keys = new Set(allObjects().map((object) => object.key));
+    state.selected = new Set(view.selected.filter((key) => keys.has(key)));
+    for (const { modelId, nodeId } of view.branches || []) {
+      const model = state.models.find((model) => model.id === modelId);
+      const node = nodeId
+        ? model?.trees[state.grouping].nodes.get(nodeId)
+        : null;
+      if (model && (!nodeId || node))
+        state.selectedBranches.set(branchKey(model, node), { model, node });
+    }
+    state.expanded = new Set(view.expanded || []);
+    state.query = view.query || "";
+    state.type = view.type || "";
+    viewer.setSection(view.section);
+    viewer.restoreCamera(view.camera);
+    viewer.setColorMode(view.colorMode);
+    viewer.setEdges(view.edges);
+    viewer.grid.visible = view.grid;
+    $("#projection").value = view.camera.projection;
+    $("#color-mode").value = view.colorMode;
+    document
+      .querySelector('[data-action="edges"]')
+      .setAttribute("aria-pressed", view.edges);
+    document
+      .querySelector('[data-action="grid"]')
+      .setAttribute("aria-pressed", view.grid);
+    setTab(view.tab);
+    toolState();
+  } catch {
+    notify("Aktuell vy kunde inte återställas efter uppdateringen.");
+  }
+  const url = new URL(location.href);
+  if (url.searchParams.has("lira-update")) {
+    url.searchParams.delete("lira-update");
+    history.replaceState(null, "", url.href);
+  }
+}
+watchAppUpdate({
+  button: $("#app-update"),
+  currentVersion: __APP_VERSION__,
+  baseUrl: import.meta.env.BASE_URL,
+  status: notify,
+  beforeUpdate: async () => {
+    if (state.loading)
+      return "Vänta tills IFC-modellerna har lästs klart innan du uppdaterar.";
+    persist();
+    sessionStorage.setItem(
+      updateSnapshotKey,
+      JSON.stringify({
+        ...viewSnapshot(
+          state.models,
+          state.hidden,
+          state.isolated,
+          viewer.cameraSnapshot(),
+          viewer.section,
+        ),
+        selected: [...state.selected],
+        branches: [...state.selectedBranches.values()].map(
+          ({ model, node }) => ({
+            modelId: model.id,
+            nodeId: node?.id || null,
+          }),
+        ),
+        expanded: [...state.expanded],
+        query: state.query,
+        type: state.type,
+        tab: state.tab,
+        colorMode: $("#color-mode").value,
+        edges: viewer.edgesEnabled,
+        grid: viewer.grid.visible,
+      }),
+    );
+  },
+});
 start();

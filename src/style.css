@@ -1512,3 +1512,19 @@ dialog .primary {
   width: 18px;
   height: 18px;
 }
+
+.model-tree summary.selected-branch {
+  background: #dbece6;
+  color: var(--accent);
+  border-radius: 4px;
+}
+
+.header .lira-update {
+  background: #74d9b0;
+  color: #153a2e;
+  border: 1px solid #74d9b0;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
