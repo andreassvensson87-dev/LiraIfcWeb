@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="LiraIFC">
+  <title>LiraIFC</title>
+  <defs><linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1aa18a"/><stop offset="1" stop-color="#0e826e"/></linearGradient></defs>
+  <path fill="#08705f" d="M96 12 114 30v68l-18 18H26L14 102V30L32 12Z"/>
+  <path fill="url(#face)" d="M32 12h64v84H14V30Z"/>
+  <path fill="#1a9c84" d="M32 12h64l18 18-18 6H30l-16-6Z"/>
+  <path fill="#106c5d" d="m96 36 18-6v68l-18 18Z"/>
+  <path fill="#0b7967" d="M14 96h82v20H26l-12-14Z"/>
+  <path fill="#a5e4ce" d="M27 43h8v39h-8ZM43 43h24v8H51v8h13v8H51v15h-8ZM75 43h13v8H78v23h10v8H75l-5-5V48Z"/>
+  <path fill="#63c9ac" d="m27 43 5-7h8l-5 7ZM43 43l5-7h24l-5 7ZM75 43l5-7h13l-5 7Z"/>
+</svg>

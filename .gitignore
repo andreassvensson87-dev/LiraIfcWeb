@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+test-results/
+
+# Local QA screenshots and work-in-progress design assets.
+docs/design/*
+!docs/design/modellvisare-koncept-v2.png
+!docs/design/liraifc-logo.png
