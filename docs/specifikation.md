@@ -33,7 +33,7 @@ Stilreferenser är LiraStructureWebs `src/lira-shell.css`, `src/ui/workspace.css
 | Navigering | LiraStructureWebs musgester: mitten/högerdrag panorerar, Shift/Ctrl/Cmd + mitten/högerdrag ger orbit runt träffad modellpunkt och scroll zoomar mot pekaren. Vänsterklick väljer objekt. Mus/styrplatta väljs i inställningsfönstret |
 | Navigationsinställningar | Zoomhastighet 25–400 % i steg om 5 %, återställning till 100 %, inverterad scrollzoom samt orbit-dämpning av/på. Sparas lokalt och gäller direkt. Nypning påverkas inte av inverteringen |
 | Projektion | Perspektiv och ortografisk projektion; topp-, fram-, sido- och isometrisk vy |
-| Urval | Klick, flerval med Shift, isolera, dölj och visa alla |
+| Urval | Klick, flerval med Shift/Ctrl/Cmd + klick. Högerklick öppnar Info, Fokusera, Göm och Isolera för hela urvalet. Högerdrag fortsätter att panorera. Markering behåller aktuell inspektorflik; Info öppnar egenskaper. Ingen flytande objektpanel eller rubrik över modellvyn |
 | Egenskaper | IFC-identitet, attribut, property sets, material och typdefinitioner när filen innehåller dem |
 | Utseende | Originalfärger, disciplinfärger, färg efter IFC-klass, kantlinjer och rutnät |
 | Snitt | Snittplan i X/Y/Z med läge och vänd riktning; snittbox med sex gränser. Slutna, opaka volymer får fyllda och skrafferade snittytor |

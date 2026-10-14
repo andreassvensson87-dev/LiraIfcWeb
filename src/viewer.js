@@ -102,29 +102,54 @@ export class Viewer {
     this.scene.add(this.snapMarker);
     let down;
     const canvas = this.renderer.domElement;
+    canvas.tabIndex = 0;
     canvas.addEventListener("pointerdown", (e) => {
-      down = { x: e.clientX, y: e.clientY, button: e.button };
+      down = {
+        x: e.clientX,
+        y: e.clientY,
+        button: e.button,
+        id: e.pointerId,
+        moved: false,
+        modified: e.shiftKey || e.metaKey || e.ctrlKey || e.altKey,
+      };
+    });
+    canvas.addEventListener("pointercancel", () => {
+      down = null;
     });
     canvas.addEventListener("pointerup", (e) => {
+      const start = down;
+      down = null;
       if (
-        down?.button !== 0 ||
-        Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5
+        !start ||
+        start.id !== e.pointerId ||
+        start.moved ||
+        Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5
       )
         return;
       const hit = this.pick(e);
-      if (this.tool === "measure") {
-        if (hit) this.addMeasurePoint(this.snapPoint(hit));
-      } else
-        this.callbacks.onSelect(
-          hit?.object,
-          e.shiftKey || e.metaKey || e.ctrlKey,
-        );
+      if (
+        start.button === 2 &&
+        !start.modified &&
+        !(e.shiftKey || e.metaKey || e.ctrlKey || e.altKey)
+      )
+        this.callbacks.onContextMenu?.(hit?.object, e);
+      else if (start.button === 0) {
+        if (this.tool === "measure") {
+          if (hit) this.addMeasurePoint(this.snapPoint(hit));
+        } else
+          this.callbacks.onSelect(
+            hit?.object,
+            e.shiftKey || e.metaKey || e.ctrlKey,
+          );
+      }
     });
     canvas.addEventListener("dblclick", (e) => {
       const hit = this.pick(e);
       if (hit && this.tool !== "measure") this.fit(hit.object.bounds);
     });
     canvas.addEventListener("pointermove", (e) => {
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
+        down.moved = true;
       if (e.buttons) return;
       const hit = this.pick(e);
       if (this.tool === "measure" && hit) {

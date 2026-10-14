@@ -75,10 +75,9 @@ $("#app").innerHTML = `
   </nav>
   <main class="workbench">
     <section id="viewport" aria-label="Modellvy">
-      <div class="canvas-caption"><span class="eyebrow">SAMORDNAD MODELL</span><span id="scene-title">LiraIFC</span><span id="demo-badge" class="demo-badge" hidden>DEMO</span></div>
       <div class="view-cube" aria-label="Standardvyer"><button data-action="view-top" title="Ovanifrån">Topp</button><div><button data-action="view-front">Fram</button><button data-action="view-right">Höger</button></div><button class="cube-iso" data-action="view-iso" title="Isometrisk vy">${icon("models")}</button></div>
       <div class="canvas-tools">${small("fit", "Passa modell · F", "fit")}${small("zoom-in", "Zooma in", "plus")}${small("zoom-out", "Zooma ut", "minus")}${small("fullscreen", "Helskärm", "expand")}</div>
-      <div id="selection-hud" class="selection-hud" hidden></div>
+      <div id="object-menu" class="object-menu" role="menu" aria-label="Markerade objekt" hidden></div>
       <div id="hover-label" class="hover-label" hidden></div>
       <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna en IFC-modell eller släpp flera filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna IFC</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
       <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp dina IFC-filer här</strong><span>Öppna flera modeller tillsammans</span></div>
@@ -106,7 +105,7 @@ $("#app").innerHTML = `
   <footer class="statusbar"><div class="status-counts"><span id="model-count">0 modeller</span><span id="object-count">0 objekt</span><span id="selection-count">Inget valt</span></div><span id="status-message" role="status">Öppnar viewer…</span><div class="view-controls"><select id="projection" aria-label="Projektion"><option value="perspective">Perspektiv</option><option value="orthographic">Ortografisk</option></select><select id="level-filter" aria-label="Våning"><option value="">Alla våningar</option></select><button class="compact" data-action="fit">${icon("fit")} Passa vy</button><span class="unit-label">m</span></div></footer>
   <input id="file-input" type="file" accept=".ifc" multiple hidden />
   <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift + klick</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mätning använder meter. Grön punkt markerar snap till en triangelhörnpunkt. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
+  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mätning använder meter. Grön punkt markerar snap till en triangelhörnpunkt. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Inställningar</h2>${small("close-dialog", "Stäng", "close")}</div><fieldset class="navigation-settings"><legend>Navigationsinställningar</legend><label class="field-label">Inmatning<select id="navigation-device"><option value="mouse">Mus</option><option value="trackpad">Styrplatta</option></select></label><label class="field-label" for="navigation-zoom-speed">Zoomhastighet <output id="navigation-zoom-value" for="navigation-zoom-speed">100 %</output><input id="navigation-zoom-speed" aria-label="Zoomhastighet" type="range" min="25" max="400" step="5" value="100"/></label><button class="text-button" data-action="reset-zoom-speed">Återställ zoomhastighet</button><label class="navigation-toggle"><span>Invertera zoomriktning</span><input id="navigation-zoom-inverted" type="checkbox"/></label><label class="navigation-toggle"><span>Dämpad orbit</span><input id="navigation-orbit-damping" type="checkbox" checked/></label><p class="muted">Inställningarna sparas automatiskt. Invertering gäller scrollzoom; nypning behåller sin naturliga riktning.</p></fieldset><button class="primary" data-action="close-dialog">Stäng</button></dialog>
   <dialog id="view-dialog"><form id="view-form"><div class="dialog-heading"><h2>Spara aktuell vy</h2>${small("close-dialog", "Stäng", "close", 'type="button"')}</div><label>Namn på vyn<input id="view-name" required maxlength="80" autocomplete="off" placeholder="Exempel: Stomme – plan 02"/></label><p class="muted">Kamera, modeller, synlighet och snitt sparas på din enhet.</p><button class="primary" type="submit">${icon("save")} Spara vy</button></form></dialog>
 `;
@@ -115,6 +114,7 @@ let viewer;
 try {
   viewer = new Viewer($("#viewport"), {
     onSelect: selectObject,
+    onContextMenu: openObjectMenu,
     onHover: (object, event) => {
       const label = $("#hover-label");
       label.hidden = !object;
@@ -182,6 +182,7 @@ function modelFor(object) {
 }
 function setTab(tab) {
   state.tab = tab;
+  if (tab === "properties") selectedObjects().forEach(requestProperties);
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const active = button.dataset.tab === tab;
     button.setAttribute("aria-selected", active);
@@ -230,14 +231,6 @@ function refresh() {
   $("#selection-count").textContent = state.selected.size
     ? `${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}`
     : "Inget valt";
-  $("#scene-title").textContent = state.models.some((m) => m.demo)
-    ? "Kontorshuset · Kv. Björken"
-    : state.models.length === 1
-      ? state.models[0].name
-      : state.models.length
-        ? "Samordnad IFC-modell"
-        : "LiraIFC";
-  $("#demo-badge").hidden = !state.models.some((m) => m.demo);
   document.querySelectorAll("[data-selection]").forEach((b) => {
     b.disabled = !state.selected.size;
   });
@@ -262,23 +255,71 @@ function refresh() {
     levels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
   $("#level-filter").value = levels.includes(currentLevel) ? currentLevel : "";
   renderPanel();
-  renderSelection();
+  closeObjectMenu();
 }
-function renderSelection() {
-  const objects = selectedObjects(),
-    hud = $("#selection-hud");
-  hud.hidden = !objects.length;
-  if (objects.length)
-    hud.innerHTML = `${icon("cursor")}<div><strong>${esc(objects.length === 1 ? objects[0].name : `${objects.length} objekt valda`)}</strong><span>${esc(objects.length === 1 ? objects[0].ifcClass : "Shift + klick för att ändra urval")}</span></div>${small("focus-selection", "Fokusera markering", "fit")}${small("clear-selection", "Avmarkera", "close")}`;
+function closeObjectMenu() {
+  $("#object-menu").hidden = true;
 }
+function openObjectMenu(object, event) {
+  if (object && !state.selected.has(object.key)) selectObject(object);
+  if (!state.selected.size) return;
+  const menu = $("#object-menu");
+  $("#hover-label").hidden = true;
+  menu.innerHTML =
+    `<div class="object-menu-title">${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}</div>` +
+    [
+      ["info", "Info", "properties"],
+      ["focus-selection", "Fokusera", "fit"],
+      ["hide", "Göm", "hide"],
+      ["isolate", "Isolera", "isolate"],
+    ]
+      .map(
+        ([action, label, glyph]) =>
+          `<button role="menuitem" data-action="${action}">${icon(glyph)}${label}</button>`,
+      )
+      .join("");
+  menu.hidden = false;
+  menu.style.left = `${Math.max(8, Math.min(event.clientX, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(event.clientY, innerHeight - menu.offsetHeight - 8))}px`;
+  menu.querySelector("button").focus({ preventScroll: true });
+}
+$("#object-menu").addEventListener("contextmenu", (event) =>
+  event.preventDefault(),
+);
+$("#object-menu").addEventListener("keydown", (event) => {
+  const buttons = [...event.currentTarget.querySelectorAll("button")];
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    closeObjectMenu();
+    viewer.renderer.domElement.focus({ preventScroll: true });
+  } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+    event.preventDefault();
+    const index = buttons.indexOf(document.activeElement);
+    buttons[
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? buttons.length - 1
+          : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+            buttons.length
+    ].focus();
+  } else if (event.key === "Tab") closeObjectMenu();
+});
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (!event.target.closest("#object-menu")) closeObjectMenu();
+  },
+  true,
+);
+window.addEventListener("resize", closeObjectMenu);
 function selectObject(object, additive = false) {
   if (!additive) state.selected.clear();
   if (object) {
     if (additive && state.selected.has(object.key))
       state.selected.delete(object.key);
     else state.selected.add(object.key);
-    setTab("properties");
-    requestProperties(object);
+    if (state.tab === "properties") requestProperties(object);
     status(`${object.name} · ${object.ifcClass}`);
   } else
     status("Mitten/högerdra: panorera · Shift + dra: orbit · Scrolla: zoom");
@@ -640,6 +681,9 @@ const actions = {
   fit: () => viewer.fit(),
   "zoom-in": () => viewer.zoom(1.2),
   "zoom-out": () => viewer.zoom(1 / 1.2),
+  info: () => {
+    setTab("properties");
+  },
   "focus-selection": () => {
     const bounds = new THREE.Box3();
     selectedObjects().forEach((o) => bounds.union(o.bounds));
@@ -704,7 +748,7 @@ const actions = {
   "select-object": (b, e) =>
     selectObject(
       allObjects().find((o) => o.key === b.dataset.key),
-      e.shiftKey || e.metaKey,
+      e.shiftKey || e.metaKey || e.ctrlKey,
     ),
   "object-visibility": (b) => {
     const object = allObjects().find((o) => o.key === b.dataset.key),
@@ -837,6 +881,7 @@ document.addEventListener("click", (e) => {
   if (!b || b.disabled) return;
   if (b.closest("summary")) e.preventDefault();
   const action = b.dataset.action;
+  if (b.closest("#object-menu")) closeObjectMenu();
   if (action.startsWith("view-")) viewer.standardView(action.slice(5));
   else actions[action]?.(b, e);
 });
@@ -972,6 +1017,7 @@ $("#view-form").addEventListener("submit", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    closeObjectMenu();
     viewer.setTool("select");
     toolState();
     renderPanel();

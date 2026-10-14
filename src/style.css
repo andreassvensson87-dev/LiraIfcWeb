@@ -327,36 +327,11 @@ h2 {
   position: absolute;
   inset: 0;
 }
-.canvas-caption {
-  position: absolute;
-  top: 22px;
-  left: 24px;
-  z-index: 2;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .eyebrow {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 1.4px;
   color: #7b929a;
-}
-.canvas-caption #scene-title {
-  font-size: 14px;
-  color: #58727b;
-  font-weight: 500;
-}
-.demo-badge {
-  font-size: 8px;
-  letter-spacing: 1.2px;
-  border: 1px solid #c3d5d1;
-  background: #f2f7f3a6;
-  border-radius: 3px;
-  color: #568374;
-  padding: 3px 5px;
-  width: max-content;
 }
 .view-cube {
   position: absolute;
@@ -435,50 +410,6 @@ h2 {
   bottom: 16px;
   z-index: 3;
   background: #ffffffd9;
-}
-.selection-hud {
-  position: absolute;
-  left: 50%;
-  top: 19px;
-  transform: translateX(-50%);
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #fffffff0;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 7px 8px 7px 12px;
-  box-shadow: 0 4px 16px #172b3208;
-  max-width: calc(100% - 340px);
-}
-.selection-hud > svg {
-  color: var(--accent);
-}
-.selection-hud > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  max-width: 200px;
-}
-.selection-hud strong {
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.selection-hud span {
-  font-size: 9px;
-  color: var(--muted);
-}
-.selection-hud .icon-button {
-  width: 27px;
-  height: 27px;
-}
-.selection-hud .icon-button svg {
-  width: 16px;
-  height: 16px;
 }
 .hover-label {
   position: absolute;
@@ -1402,10 +1333,6 @@ dialog .primary {
   #status-message {
     display: none;
   }
-  .selection-hud {
-    max-width: calc(100% - 240px);
-    top: 85px;
-  }
   .statusbar {
     justify-content: space-between;
   }
@@ -1413,13 +1340,6 @@ dialog .primary {
 @media (max-width: 900px) {
   .workbench {
     grid-template-columns: minmax(0, 1fr) 300px;
-  }
-  .canvas-caption {
-    left: 16px;
-    top: 15px;
-  }
-  .canvas-caption #scene-title {
-    font-size: 12px;
   }
   .status-counts > span {
     padding: 0 7px;
@@ -1450,11 +1370,6 @@ dialog .primary {
   }
   .view-controls .compact {
     display: none;
-  }
-  .selection-hud {
-    left: 16px;
-    transform: none;
-    max-width: calc(100% - 100px);
   }
   .tool-hud {
     max-width: calc(100% - 20px);
@@ -1527,12 +1442,6 @@ dialog .primary {
     visibility: visible;
     box-shadow: -8px 0 25px #192f3518;
   }
-  .canvas-caption .eyebrow {
-    font-size: 8px;
-  }
-  .canvas-caption #scene-title {
-    font-size: 11px;
-  }
   .statusbar {
     gap: 5px;
     padding: 0 8px;
@@ -1576,4 +1485,44 @@ dialog .primary {
   .panel-toggle {
     z-index: 9;
   }
+}
+
+.object-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 185px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 28px #203c4526;
+}
+.object-menu-title {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.object-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 9px 10px;
+  text-align: left;
+  border-radius: 4px;
+  color: inherit;
+}
+.object-menu button:hover,
+.object-menu button:focus-visible {
+  background: #eaf3f0;
+  color: var(--accent);
+  outline: none;
+}
+.object-menu button svg {
+  width: 18px;
+  height: 18px;
 }
