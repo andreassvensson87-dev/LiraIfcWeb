@@ -33,6 +33,7 @@ GitHub Actions kör tester och produktionsbygge vid ändringar i `main` och publ
 - System och zoner läses från IFC-relationer; objekt utan tillhörighet finns under Ej tilldelat system respektive Ej tilldelad zon.
 - Tänd/släck efter modell- och grennamn, inklusive våningar, med synligt blandat läge vid delvis dolda objekt.
 - Objektval, flerval, fokusering, isolering och IFC-egenskaper.
+- Rektangelmarkering med vänsterdrag: blå ruta från vänster till höger väljer helt inneslutna objekt, grön ruta från höger till vänster väljer berörda objekt. Shift lägger till; Esc avbryter. Snitt och synlighet respekteras.
 - Perspektiv, ortografiska vyer, färgsättning och valbara kantlinjer.
 - Navigation som i LiraStructureWeb: vänsterklick väljer, mitten/högerdrag panorerar, Shift/Ctrl/Cmd + mitten/högerdrag roterar runt träffad modellpunkt och scroll zoomar mot pekaren.
 - Mus/styrplatta väljs i inställningsfönstret. Styrplattans tvåfingerscroll panorerar och nypning zoomar.

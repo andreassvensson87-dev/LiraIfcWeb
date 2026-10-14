@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { selectInRectangle } from "./rectangle-selection.js";
+import { installRectangleSelection } from "./rectangle-input.js";
 import { SectionCaps } from "./section-caps.js";
 import {
   configureNavigation,
@@ -52,7 +54,7 @@ export class Viewer {
     host.prepend(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
-      "3D-modell. Mitten- eller högerdra för att panorera. Håll Shift, Ctrl eller Cmd samtidigt för att rotera. Rulla för att zooma mot pekaren.",
+      "3D-modell. Vänsterdra för rektangelmarkering. Shift lägger till i markeringen. Mitten- eller högerdra för att panorera. Håll Shift, Ctrl eller Cmd samtidigt för att rotera. Rulla för att zooma mot pekaren.",
     );
     this.renderer.domElement.tabIndex = 0;
     this.perspective = new THREE.PerspectiveCamera(40, 1, 0.01, 10000);
@@ -170,6 +172,36 @@ export class Viewer {
       this.snapMarker.visible = false;
       this.invalidate();
     });
+    let rectangleControlsEnabled;
+    this.rectangleSelection = installRectangleSelection({
+      host,
+      canvas,
+      enabled: () => this.tool === "select" && this.models.length > 0,
+      onStart: () => {
+        this.inputNavigation.cancel();
+        rectangleControlsEnabled = this.controls.enabled;
+        this.controls.enabled = false;
+      },
+      onFinish: () => {
+        this.controls.enabled = rectangleControlsEnabled;
+      },
+      onClick: (event, additive) =>
+        this.callbacks.onSelect(this.pick(event)?.object, additive),
+      onRectangle: (start, end, additive) => {
+        const objects = selectInRectangle(
+          this.batches,
+          this.camera,
+          this.width,
+          this.height,
+          start,
+          end,
+          this.hidden,
+          this.isolated,
+          this.clippingPlanes,
+        );
+        this.callbacks.onSelectMany(objects, additive);
+      },
+    });
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     canvas.addEventListener("webglcontextlost", (e) => {
       e.preventDefault();
@@ -186,8 +218,10 @@ export class Viewer {
     if (this.frame != null) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = null;
-      const orbiting = this.inputNavigation.update();
-      if (this.controls.update() || orbiting) this.invalidate();
+      if (!this.rectangleSelection?.active) {
+        const orbiting = this.inputNavigation.update();
+        if (this.controls.update() || orbiting) this.invalidate();
+      }
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, this.width, this.height);
       this.renderer.render(this.scene, this.camera);
@@ -217,6 +251,7 @@ export class Viewer {
     });
   }
   resize() {
+    this.rectangleSelection?.cancel();
     this.width = Math.max(1, this.host.clientWidth);
     this.height = Math.max(1, this.host.clientHeight);
     this.renderer.setSize(this.width, this.height);
@@ -538,6 +573,7 @@ export class Viewer {
     return nearest;
   }
   setTool(tool) {
+    this.rectangleSelection.cancel();
     this.tool = tool;
     this.measureStart = null;
     this.snapMarker.visible = false;

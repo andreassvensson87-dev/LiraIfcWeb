@@ -378,15 +378,6 @@ h2 {
   width: 17px;
   height: 17px;
 }
-.canvas-tools {
-  position: absolute;
-  z-index: 3;
-  right: 23px;
-  top: 140px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -397,12 +388,6 @@ h2 {
   border-radius: 5px;
   background: transparent;
   flex-shrink: 0;
-}
-.canvas-tools .icon-button {
-  width: 34px;
-  height: 34px;
-  background: #ffffffdc;
-  border-color: #cbd8dc;
 }
 .panel-toggle {
   position: absolute;
@@ -1445,9 +1430,6 @@ dialog .primary {
   .empty-state h1 {
     font-size: 20px;
   }
-  .canvas-tools {
-    right: 12px;
-  }
   .view-cube {
     right: 12px;
   }
@@ -1527,4 +1509,16 @@ dialog .primary {
   padding: 7px 10px;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+.selection-box {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  border: 1px solid #377cc1;
+  background: #377cc11a;
+}
+.selection-box.crossing {
+  border: 1px dashed #218a70;
+  background: #218a7024;
 }

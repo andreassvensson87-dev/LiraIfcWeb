@@ -78,7 +78,6 @@ $("#app").innerHTML = `
   <main class="workbench">
     <section id="viewport" aria-label="Modellvy">
       <div class="view-cube" aria-label="Standardvyer"><button data-action="view-top" title="Ovanifrån">Topp</button><div><button data-action="view-front">Fram</button><button data-action="view-right">Höger</button></div><button class="cube-iso" data-action="view-iso" title="Isometrisk vy">${icon("models")}</button></div>
-      <div class="canvas-tools">${small("fit", "Passa modell · F", "fit")}${small("zoom-in", "Zooma in", "plus")}${small("zoom-out", "Zooma ut", "minus")}${small("fullscreen", "Helskärm", "expand")}</div>
       <div id="object-menu" class="object-menu" role="menu" aria-label="Markerade objekt" hidden></div>
       <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna en IFC-modell eller släpp flera filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna IFC</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
       <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp dina IFC-filer här</strong><span>Öppna flera modeller tillsammans</span></div>
@@ -106,7 +105,7 @@ $("#app").innerHTML = `
   <footer class="statusbar"><div class="status-counts"><span id="model-count">0 modeller</span><span id="object-count">0 objekt</span><span id="selection-count">Inget valt</span></div><span id="status-message" role="status">Öppnar viewer…</span><div class="view-controls"><select id="projection" aria-label="Projektion"><option value="perspective">Perspektiv</option><option value="orthographic">Ortografisk</option></select><select id="level-filter" aria-label="Våning"><option value="">Alla våningar</option></select><button class="compact" data-action="fit">${icon("fit")} Passa vy</button><span class="unit-label">m</span></div></footer>
   <input id="file-input" type="file" accept=".ifc" multiple hidden />
   <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mätning använder meter. Grön punkt markerar snap till en triangelhörnpunkt. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
+  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Rektangelmarkering</dt><dd>Vänsterdra. Blå ruta väljer helt inneslutna objekt, grön ruta väljer berörda objekt. Shift lägger till; Esc avbryter.</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mätning använder meter. Grön punkt markerar snap till en triangelhörnpunkt. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Inställningar</h2>${small("close-dialog", "Stäng", "close")}</div><fieldset class="navigation-settings"><legend>Navigationsinställningar</legend><label class="field-label">Inmatning<select id="navigation-device"><option value="mouse">Mus</option><option value="trackpad">Styrplatta</option></select></label><label class="field-label" for="navigation-zoom-speed">Zoomhastighet <output id="navigation-zoom-value" for="navigation-zoom-speed">100 %</output><input id="navigation-zoom-speed" aria-label="Zoomhastighet" type="range" min="25" max="400" step="5" value="100"/></label><button class="text-button" data-action="reset-zoom-speed">Återställ zoomhastighet</button><label class="navigation-toggle"><span>Invertera zoomriktning</span><input id="navigation-zoom-inverted" type="checkbox"/></label><label class="navigation-toggle"><span>Dämpad orbit</span><input id="navigation-orbit-damping" type="checkbox" checked/></label><p class="muted">Inställningarna sparas automatiskt. Invertering gäller scrollzoom; nypning behåller sin naturliga riktning.</p></fieldset><button class="primary" data-action="close-dialog">Stäng</button></dialog>
   <dialog id="view-dialog"><form id="view-form"><div class="dialog-heading"><h2>Spara aktuell vy</h2>${small("close-dialog", "Stäng", "close", 'type="button"')}</div><label>Namn på vyn<input id="view-name" required maxlength="80" autocomplete="off" placeholder="Exempel: Stomme – plan 02"/></label><p class="muted">Kamera, modeller, synlighet och snitt sparas på din enhet.</p><button class="primary" type="submit">${icon("save")} Spara vy</button></form></dialog>
 `;
@@ -115,7 +114,11 @@ let viewer;
 try {
   viewer = new Viewer($("#viewport"), {
     onSelect: selectObject,
-    onContextMenu: openObjectMenu,
+    onSelectMany: selectObjects,
+    onContextMenu: (object, event) => {
+      if (object) openObjectMenu(object, event);
+      else openBackgroundMenu(event);
+    },
     onMeasureStart: () => status("Välj andra punkten. Esc avbryter."),
     onMeasure: (distance) => {
       status(
@@ -290,32 +293,64 @@ function openObjectMenu(object, event, branch = null) {
     selectBranch(branch);
   if (object && !state.selected.has(object.key)) selectObject(object);
   if (!state.selected.size) return;
-  const menu = $("#object-menu");
-
-  menu.innerHTML =
-    `<div class="object-menu-title">${branch ? `${state.selectedBranches.size > 1 ? `${state.selectedBranches.size} grenar markerade` : esc(branch.node?.name || branch.model.name)}<br/>` : ""}${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}</div>` +
+  showContextMenu(
+    `${branch ? `${state.selectedBranches.size > 1 ? `${state.selectedBranches.size} grenar markerade` : esc(branch.node?.name || branch.model.name)}<br/>` : ""}${state.selected.size} ${state.selected.size === 1 ? "objekt valt" : "objekt valda"}`,
     [
       ...(!branch ? [["info", "Info", "properties"]] : []),
       ["focus-selection", "Fokusera", "fit"],
       ["show-selection", "Visa", "eye"],
       ["hide", "Göm", "hide"],
       [branch ? "isolate-branch" : "isolate", "Isolera", "isolate"],
-    ]
+    ],
+    event,
+  );
+}
+function openBackgroundMenu(event) {
+  showContextMenu(
+    "Modellvy",
+    [
+      ["show-all", "Visa alla", "eye", !state.models.length],
+      ["fit", "Anpassa modell", "fit", !state.models.length],
+      [
+        "fullscreen",
+        document.fullscreenElement ? "Avsluta helskärm" : "Helskärm",
+        "expand",
+      ],
+    ],
+    event,
+  );
+}
+function showContextMenu(title, items, event) {
+  const menu = $("#object-menu");
+  menu.setAttribute(
+    "aria-label",
+    title === "Modellvy" ? "Modellvy" : "Markerade objekt",
+  );
+  menu.innerHTML =
+    `<div class="object-menu-title">${title}</div>` +
+    items
       .map(
-        ([action, label, glyph]) =>
-          `<button role="menuitem" data-action="${action}">${icon(glyph)}${label}</button>`,
+        ([action, label, glyph, disabled]) =>
+          `<button role="menuitem" data-action="${action}" ${disabled ? "disabled" : ""}>${icon(glyph)}${label}</button>`,
       )
       .join("");
   menu.hidden = false;
   menu.style.left = `${Math.max(8, Math.min(event.clientX, innerWidth - menu.offsetWidth - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(event.clientY, innerHeight - menu.offsetHeight - 8))}px`;
-  menu.querySelector("button").focus({ preventScroll: true });
+  menu.querySelector("button:not(:disabled)").focus({ preventScroll: true });
 }
+$("#empty").addEventListener("contextmenu", (event) => {
+  if (event.target.closest("button")) return;
+  event.preventDefault();
+  openBackgroundMenu(event);
+});
 $("#object-menu").addEventListener("contextmenu", (event) =>
   event.preventDefault(),
 );
 $("#object-menu").addEventListener("keydown", (event) => {
-  const buttons = [...event.currentTarget.querySelectorAll("button")];
+  const buttons = [
+    ...event.currentTarget.querySelectorAll("button:not(:disabled)"),
+  ];
   if (event.key === "Escape") {
     event.stopPropagation();
     closeObjectMenu();
@@ -341,6 +376,16 @@ document.addEventListener(
   true,
 );
 window.addEventListener("resize", closeObjectMenu);
+function selectObjects(objects, additive = false) {
+  state.selectedBranches.clear();
+  if (!additive) state.selected.clear();
+  objects.forEach((object) => state.selected.add(object.key));
+  if (state.tab === "properties") selectedObjects().forEach(requestProperties);
+  refresh();
+  status(
+    `${state.selected.size} objekt markerade · Högerklick på markeringen för objektmenyn`,
+  );
+}
 function selectObject(object, additive = false) {
   state.selectedBranches.clear();
   if (!additive) state.selected.clear();

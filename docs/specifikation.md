@@ -89,3 +89,15 @@ Det senaste bildförslaget fastställer placeringen av modellträdet och Liras f
 Toppfältets gröna Uppdatera appen visas när versionskontrollen hittar en ny publicerad version. Kontrollen görs vid start, när appen återfår fokus och var 15:e minut. Användaren startar uppdateringen med knappen; inga automatiska omladdningar. En pågående IFC-import måste bli klar först. Kamera, snitt, synlighet, markering och utseende återställs efter omladdningen; modeller och sparade vyer finns kvar i lokal lagring.
 
 Visa i objekt- och grenmenyn återvisar hela markeringen, även under isolering. Om modellen var släckt visas bara markerade objekt eller grenar; modellens övriga objekt förblir dolda.
+
+Högerklick på modellvyns tomma bakgrund öppnar Visa alla, Anpassa modell och Helskärm. Menyn visas även om objekt är markerade, utan att markeringen ändras. Högerdrag fortsätter att panorera. Den tidigare flytande knappstapeln för passning, zoom och helskärm är borttagen; zoom sker med scroll eller nypning.
+
+## Rektangelmarkering
+
+Vänsterdrag i modellvyn startar rektangelmarkering direkt. Vänster till höger visar en blå ruta med heldragen kant och väljer objekt vars återstående geometri är helt innesluten. Höger till vänster visar en grön ruta med streckad kant och väljer objekt vars ytor berör rutan. Shift vid dragstart lägger till utan att avmarkera tidigare urval; utan Shift ersätts urvalet. Ett kort klick behåller vanlig objektmarkering och Shift/Ctrl/Cmd-flerval.
+
+Urvalet använder objektens verkliga trianglar och snittytor, inklusive öppningar, i perspektiv och ortografisk vy. Påslagna objekt bakom andra objekt ingår. Dolda objekt, släckta modeller, geometri utanför kamerans djupområde och bortklippta delar ingår inte. Objekt med flera delar eller renderingsbatcher behandlas som ett gemensamt IFC-objekt. Kameran pausas under dragningen. Esc, förlorat fönsterfokus eller ändrad viewportstorlek avbryter utan att ändra urvalet. Mätverktygets vänstergester behåller sin funktion.
+
+## Installerad app och ikoner
+
+Appmanifestet anger LiraIFC som namn, fristående appfönster och relativ start-URL/scope för GitHub Pages och lokal preview. Windows installationsikoner (32, 44, 48, 64, 128, 192, 256 och 512 px), favicon och Apple-ikonen är exporter från samma public/lira-icon.svg som används i toppfältet. Ingen separat eller alternativ logga används för installationen. Äldre installationer kan behöva läsa in uppdaterad appmetadata för att få rätt ikon.
