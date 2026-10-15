@@ -41,8 +41,22 @@ export class SnapResolver {
     this.cursor = null;
     this.lineId = null;
     this.lineCycled = false;
+    this.autoId = null;
+    this.autoCycled = false;
+    this.cycled = false;
   }
   cycle(kind = "point") {
+    if (kind === "auto") {
+      const choices = this.autoChoices();
+      if (choices.length > 1) {
+        const index = choices.findIndex(
+          (f) => f.id === this.feature("auto")?.id,
+        );
+        this.autoId = choices[(index + 1) % choices.length].id;
+        this.autoCycled = true;
+      }
+      return;
+    }
     if (kind === "line") {
       if (this.lines.length > 1) {
         const index = this.lines.findIndex(
@@ -192,6 +206,7 @@ export class SnapResolver {
     if (moved) {
       this.cycled = false;
       this.lineCycled = false;
+      this.autoCycled = false;
     }
     this.cursor = cursor;
     const candidates = [],
@@ -275,6 +290,7 @@ export class SnapResolver {
         f = objectFeatures(hit.object, model),
         raw = hitFace(f, hit);
       this.face = raw ? clipFeature(raw, v.clippingPlanes) : null;
+      if (this.face) this.face.pickPoint = hit.point.clone();
       if (anchor && this.face) {
         const point = this.face.plane.projectPoint(anchor, new THREE.Vector3());
         const d = closestFeatures({ kind: "point", point }, this.face);
@@ -309,6 +325,14 @@ export class SnapResolver {
     return this.chosen;
   }
   feature(kind) {
+    if (kind === "auto") {
+      const choices = this.autoChoices();
+      return (
+        (this.autoCycled && choices.find((f) => f.id === this.autoId)) ||
+        choices[0] ||
+        null
+      );
+    }
     if (kind === "line")
       return (
         (this.lineCycled && this.lines.find((l) => l.id === this.lineId)) ||
@@ -317,5 +341,19 @@ export class SnapResolver {
       );
     if (kind === "face") return this.face;
     return this.chosen || null;
+  }
+  autoChoices() {
+    // Distinct point snaps take precedence; otherwise infer an edge or a face.
+    // Keep ordinary surface points last so Tab can override an inferred face.
+    return [
+      ...this.candidates.filter(
+        (c) => c.snap !== "edge" && c.snap !== "surface" && c.pixels <= 8,
+      ),
+      ...this.lines.filter((line) => line.pixels <= 6),
+      ...(this.face ? [this.face] : []),
+      ...this.candidates.filter(
+        (c) => c.snap === "edge" || c.snap === "surface",
+      ),
+    ];
   }
 }

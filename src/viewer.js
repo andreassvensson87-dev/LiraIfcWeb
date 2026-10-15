@@ -299,7 +299,7 @@ export class Viewer {
         this.renderer.autoClear = true;
         this.renderer.setScissorTest(false);
       }
-      if (this.snapMarker.visible && !this.snapBadge.hidden) {
+      if (!this.snapBadge.hidden) {
         const point = this.snapMarker.position.clone().project(this.camera);
         this.snapBadge.style.left = `${(point.x * 0.5 + 0.5) * this.width + 14}px`;
         this.snapBadge.style.top = `${(-point.y * 0.5 + 0.5) * this.height + 10}px`;
@@ -709,7 +709,7 @@ export class Viewer {
     );
   }
   showSnap(snap) {
-    this.snapMarker.visible = !!snap;
+    this.snapMarker.visible = !!snap && this.tool !== "measure";
     this.snapBadge.hidden = !snap;
     if (snap) {
       this.snapMarker.position.copy(snap.point);
@@ -727,6 +727,7 @@ export class Viewer {
         ground: "○",
       };
       this.snapBadge.dataset.kind = snap.snap;
+      this.snapBadge.dataset.tool = this.tool;
       this.snapBadge.textContent = `${symbols[snap.snap] || "○"} ${snapNames[snap.snap] || "Punkt"} · Tab`;
     }
     this.invalidate();

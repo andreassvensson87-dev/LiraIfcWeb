@@ -211,14 +211,43 @@ test("Screen-space snaps prioritize corners and midpoints, reject hidden occlude
   };
   const corner = { clientX: 700, clientY: 700 };
   assert.equal(snap.resolve(corner, hit(corner)).snap, "endpoint");
+  assert.equal(snap.feature("auto").kind, "point");
   snap.cycle();
   assert.notEqual(snap.resolve(corner, hit(corner)).snap, "endpoint");
   snap.reset();
   const mid = { clientX: 500, clientY: 700 };
   assert.equal(snap.resolve(mid, hit(mid)).snap, "midpoint");
+  assert.equal(snap.feature("auto").kind, "point");
+  const edge = { clientX: 600, clientY: 700 };
+  snap.resolve(edge, hit(edge));
+  assert.equal(snap.feature("auto").kind, "line");
+  const insideEdge = { clientX: 600, clientY: 691 };
+  snap.resolve(insideEdge, hit(insideEdge));
+  assert.equal(
+    snap.feature("auto").kind,
+    "face",
+    "automatic edges use a tighter tolerance so nearby faces remain accessible",
+  );
   snap.reset();
   const center = { clientX: 500, clientY: 500 };
   assert.equal(snap.resolve(center, hit(center)).snap, "surface");
+  assert.equal(snap.feature("auto").kind, "face");
+  snap.cycle("auto");
+  snap.resolve(center, hit(center));
+  assert.equal(
+    snap.feature("auto").kind,
+    "point",
+    "Tab offers a point on the face",
+  );
+  snap.resolve(
+    { clientX: 510, clientY: 500 },
+    hit({ clientX: 510, clientY: 500 }),
+  );
+  assert.equal(
+    snap.feature("auto").kind,
+    "face",
+    "moving restores automatic inference",
+  );
   assert.equal(
     snap.lines.length,
     0,
@@ -228,6 +257,7 @@ test("Screen-space snaps prioritize corners and midpoints, reject hidden occlude
   v.snapRevision++;
   model.batches[0].mesh.visible = false;
   assert.equal(snap.resolve(corner, null), undefined);
+  assert.equal(snap.feature("auto"), null);
 });
 test("Reference move constraints operate in world metres without changing the unlocked origin", () => {
   assert.deepEqual(

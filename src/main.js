@@ -749,9 +749,16 @@ function measurementModes() {
     )
     .join("")}</div>`;
 }
+function measurementPrompt() {
+  const step = viewer.measureTool.first ? 1 : 0;
+  const mode = viewer.measureTool.modes[step];
+  return mode === "auto"
+    ? `Peka på punkt, kant eller plan yta · val ${step + 1}`
+    : `Välj ${geometryNames[mode].toLowerCase()} ${step + 1}`;
+}
 function measurementSettings() {
   const tool = viewer.measureTool;
-  return `${measurementModes()}<div class="measurement-modes"><label>Enhet<select data-measure-unit aria-label="Måttenhet">${["m", "cm", "mm"].map((unit) => `<option ${unit === tool.unit ? "selected" : ""}>${unit}</option>`).join("")}</select></label><label>Decimaler<select data-measure-decimals aria-label="Antal decimaler">${[0, 1, 2, 3, 4].map((n) => `<option ${n === tool.decimals ? "selected" : ""}>${n}</option>`).join("")}</select></label></div><details class="snap-settings"><summary>Snappning</summary>${["enabled", "endpoint", "midpoint", "center", "perpendicular", "edge", "surface"].map((key) => `<label><input type="checkbox" data-snap-setting="${key}" ${viewer.snap.settings[key] ? "checked" : ""}/> ${key === "enabled" ? "Aktivera snap" : snapNames[key]}</label>`).join("")}<p class="muted">Tab växlar mellan närliggande snapalternativ. Endast synlig geometri används.</p></details>`;
+  return `${measurementModes()}<div class="measurement-modes"><label>Enhet<select data-measure-unit aria-label="Måttenhet">${["m", "cm", "mm"].map((unit) => `<option ${unit === tool.unit ? "selected" : ""}>${unit}</option>`).join("")}</select></label><label>Decimaler<select data-measure-decimals aria-label="Antal decimaler">${[0, 1, 2, 3, 4].map((n) => `<option ${n === tool.decimals ? "selected" : ""}>${n}</option>`).join("")}</select></label></div><details class="snap-settings"><summary>Snappning</summary>${["enabled", "endpoint", "midpoint", "center", "perpendicular", "edge", "surface"].map((key) => `<label><input type="checkbox" data-snap-setting="${key}" ${viewer.snap.settings[key] ? "checked" : ""}/> ${key === "enabled" ? "Aktivera snap" : snapNames[key]}</label>`).join("")}</details>`;
 }
 function reviewPanel() {
   const s = viewer.section;
@@ -767,7 +774,7 @@ function reviewPanel() {
     .join("")}</div>
     ${s.mode === "plane" ? `<label class="field-label">Riktning<select id="clip-axis"><option value="x" ${s.axis === "x" ? "selected" : ""}>X – sida</option><option value="y" ${s.axis === "y" ? "selected" : ""}>Y – höjd</option><option value="z" ${s.axis === "z" ? "selected" : ""}>Z – djup</option></select></label><label class="field-label">Snittläge <output>${s.position}%</output><input id="clip-position" type="range" min="0" max="100" value="${s.position}"/></label><label class="checkbox-label"><input id="clip-invert" type="checkbox" ${s.invert ? "checked" : ""}/> Vänd snittriktning</label>` : ""}
     ${s.mode === "box" ? ["X", "Y · höjd", "Z"].map((axis, i) => `<div class="box-range"><strong>${axis}</strong>${["Min", "Max"].map((label, j) => `<label>${label}<input type="range" data-box-index="${i * 2 + j}" min="0" max="100" value="${s.box[i * 2 + j]}" aria-label="${axis} ${label}"/><output>${s.box[i * 2 + j]}%</output></label>`).join("")}</div>`).join("") : ""}
-    <p class="muted">Snitt påverkar bara visningen. Modellens geometri ändras inte.</p><h2 class="section-heading">Mät avstånd</h2>${measurementSettings()}<button class="wide-button ${viewer.tool === "measure" ? "active" : ""}" data-action="measure">${icon("ruler")} ${viewer.tool === "measure" ? "Avsluta mätning" : "Starta mätning"}</button><p class="muted">Välj punkt, rak kant eller sammanhängande plan yta i valfri kombination. Måttet är kortaste avståndet mellan de begränsade delarna. Måtten är temporära. Högerklicka på bakgrunden → Rensa mått.</p>${viewer.measurements.map((m, i) => `<div class="measurement-result"><span>Mått ${m.id} · ${m.types.map((kind) => geometryNames[kind]).join(" → ")}</span><strong>${viewer.measureTool.format(m.distance)}</strong><small>ΔX ${viewer.measureTool.format(m.end.x - m.start.x)} · ΔY ${viewer.measureTool.format(m.end.y - m.start.y)} · ΔZ ${viewer.measureTool.format(m.end.z - m.start.z)}</small><button class="text-button" data-action="remove-measure" data-measure="${m.id}">Ta bort mått</button></div>`).join("")}${viewer.measurements.length ? '<button class="text-button" data-action="clear-measures">Rensa alla mått</button>' : ""}`;
+    <p class="muted">Snitt påverkar bara visningen. Modellens geometri ändras inte.</p><h2 class="section-heading">Mät avstånd</h2>${measurementSettings()}<button class="wide-button ${viewer.tool === "measure" ? "active" : ""}" data-action="measure">${icon("ruler")} ${viewer.tool === "measure" ? "Avsluta mätning" : "Starta mätning"}</button>${viewer.measurements.length ? '<button class="text-button" data-action="clear-measures">Rensa mått</button>' : ""}`;
 }
 
 function toolState() {
@@ -808,11 +815,10 @@ function toolState() {
     hud.innerHTML = `<span>${esc(undo.model.name)}</span><button class="compact" data-action="undo-placement" title="Ctrl+Z / Cmd+Z" ${state.undoBusy ? "disabled" : ""}>Ångra flytt</button>${small("dismiss-move-undo", "Stäng", "close")}`;
     return;
   }
-  hud.hidden = viewer.tool !== "measure" && viewer.section.mode === "none";
-  hud.innerHTML =
-    viewer.tool === "measure"
-      ? `${icon("ruler")}${measurementModes()}<span>Välj ${geometryNames[viewer.measureTool.modes[viewer.measureTool.first ? 1 : 0]].toLowerCase()} ${viewer.measureTool.first ? "2" : "1"}</span>${small("clear-measures", "Rensa mått", "trash")}${small("exit-tool", "Avsluta mätning", "close")}`
-      : `${icon("cut")}<span>${viewer.section.mode === "plane" ? "Snittplan aktivt" : "Snittbox aktiv"}</span><button class="compact" data-tab="review">Justera</button>${small("clip-none", "Stäng snitt", "close")}`;
+  hud.hidden = viewer.tool === "measure" || viewer.section.mode === "none";
+  hud.innerHTML = hud.hidden
+    ? ""
+    : `${icon("cut")}<span>${viewer.section.mode === "plane" ? "Snittplan aktivt" : "Snittbox aktiv"}</span><button class="compact" data-tab="review">Justera</button>${small("clip-none", "Stäng snitt", "close")}`;
 }
 function setClip(mode) {
   viewer.setSection({ ...viewer.section, mode });
@@ -1303,9 +1309,7 @@ const actions = {
     viewer.setTool(viewer.tool === "measure" ? "select" : "measure");
     if (viewer.tool === "measure") {
       setTab("review");
-      status(
-        `Välj första geometrin: ${geometryNames[viewer.measureTool.modes[0]].toLowerCase()}.`,
-      );
+      status(measurementPrompt());
     }
     toolState();
     renderPanel();

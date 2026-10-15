@@ -1,6 +1,10 @@
 import * as THREE from "three";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { closestFeatures } from "./measurement-geometry.js";
 export const geometryNames = {
+  auto: "Automatiskt",
   point: "Punkt",
   line: "Linje",
   face: "Plan yta",
@@ -8,7 +12,7 @@ export const geometryNames = {
 export class MeasurementTool {
   constructor(viewer) {
     this.v = viewer;
-    this.modes = ["point", "point"];
+    this.modes = ["auto", "auto"];
     this.unit = "m";
     this.decimals = 3;
     this.nextId = 1;
@@ -24,11 +28,33 @@ export class MeasurementTool {
     if (!object) return;
     this.v.scene.remove(object);
     object.traverse((o) => {
+      o.userData.measureMarker?.remove();
+      o.userData.measureChain?.remove();
       o.geometry?.dispose();
-      if (o.material) o.material.dispose();
+      if (o.material) {
+        o.material.map?.dispose();
+        o.material.dispose();
+      }
     });
   }
-  overlay(feature, color) {
+  stroke(positions, color, width) {
+    const line = new LineSegments2(
+      new LineSegmentsGeometry().setPositions(positions),
+      new LineMaterial({
+        color,
+        linewidth: width,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -3,
+      }),
+    );
+    line.renderOrder = 112;
+    return line;
+  }
+  overlay(feature, color, emphasized = false) {
     const group = new THREE.Group();
     if (feature.kind === "face") {
       const geometry = new THREE.BufferGeometry();
@@ -39,39 +65,52 @@ export class MeasurementTool {
           3,
         ),
       );
-      group.add(
-        new THREE.Mesh(
-          geometry,
-          new THREE.MeshBasicMaterial({
-            color,
-            transparent: true,
-            opacity: 0.23,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -2,
-          }),
-        ),
+      const fill = new THREE.Mesh(
+        geometry,
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: emphasized ? 0.28 : 0.12,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        }),
       );
+      fill.renderOrder = 111;
+      group.add(fill);
+      // Coplanar internal triangle edges disappear; outer boundaries and holes remain.
+      const boundary = new THREE.EdgesGeometry(geometry, 1);
+      const positions = Array.from(boundary.attributes.position.array);
+      boundary.dispose();
+      if (positions.length)
+        group.add(this.stroke(positions, color, emphasized ? 2 : 1));
     } else if (feature.kind === "line") {
-      const line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([feature.a, feature.b]),
-        new THREE.LineBasicMaterial({ color, depthTest: false }),
-      );
-      line.renderOrder = 12;
-      group.add(line);
+      const positions = [...feature.a.toArray(), ...feature.b.toArray()];
+      if (emphasized) group.add(this.stroke(positions, 0xffffff, 5));
+      const core = this.stroke(positions, color, emphasized ? 2.5 : 1.5);
+      core.renderOrder = 113;
+      group.add(core);
     } else {
-      const radius = this.v.camera.isPerspectiveCamera
-        ? this.v.camera.position.distanceTo(feature.point) * 0.004
-        : ((this.v.camera.top - this.v.camera.bottom) / this.v.camera.zoom) *
-          0.004;
-      const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(Math.max(0.00001, radius), 10, 8),
-        new THREE.MeshBasicMaterial({ color, depthTest: false }),
+      const marker = document.createElement("div");
+      marker.hidden = true;
+      marker.className = `measure-point${emphasized ? " is-active" : ""}`;
+      marker.style.setProperty(
+        "--marker-color",
+        `#${new THREE.Color(color).getHexString()}`,
       );
-      marker.position.copy(feature.point);
-      marker.renderOrder = 12;
-      group.add(marker);
+      marker.dataset.snap = feature.snap || "point";
+      const paths = {
+        endpoint: '<rect x="5" y="5" width="14" height="14" rx="1"/>',
+        midpoint: '<path d="M12 4 21 20H3Z"/>',
+        center: '<circle cx="12" cy="12" r="8"/><path d="M12 1v22M1 12h22"/>',
+        perpendicular: '<path d="M5 4v15h15M5 13h6v6"/>',
+      };
+      marker.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[feature.snap] || '<circle cx="12" cy="12" r="6"/>'}<circle class="measure-point-center" cx="12" cy="12" r="1.5"/></svg>`;
+      this.v.host.append(marker);
+      group.userData.measureMarker = marker;
+      group.userData.measurePoint = feature.point.clone();
     }
     this.v.scene.add(group);
     return group;
@@ -90,13 +129,16 @@ export class MeasurementTool {
             snap: feature.kind === "line" ? "edge" : "surface",
           }
         : feature
-          ? this.v.snap.chosen
+          ? feature
           : null,
     );
     if (feature?.kind !== "point" && feature?.id === this.hoverId) {
     } else {
       this.dispose(this.hoverOverlay);
-      this.hoverOverlay = feature ? this.overlay(feature, 0x268cba) : null;
+      this.hoverOverlay =
+        feature && !(feature.kind !== "point" && feature.id === this.first?.id)
+          ? this.overlay(feature, 0x008fc7, true)
+          : null;
       this.hoverId = feature?.id;
     }
     this.clearPreview();
@@ -123,9 +165,13 @@ export class MeasurementTool {
   }
   accept(feature) {
     if (!this.first) {
+      this.dispose(this.hoverOverlay);
+      this.hoverOverlay = null;
+      this.hoverId = null;
+      this.v.hideSnap();
       this.first = feature;
       this.v.measureStart = this.anchor?.clone() || null;
-      this.firstOverlay = this.overlay(feature, 0xe29c37);
+      this.firstOverlay = this.overlay(feature, 0xe29c37, true);
       this.v.callbacks.onMeasureStart();
       this.v.invalidate();
       return;
@@ -135,10 +181,8 @@ export class MeasurementTool {
     const types = [this.first.kind, feature.kind],
       id = this.nextId++;
     const drawn = this.drawDistance(result, id);
-    drawn.group.add(
-      this.overlay(this.first, 0xe29c37),
-      this.overlay(feature, 0x339f87),
-    );
+    drawn.label.title = types.map((kind) => geometryNames[kind]).join(" → ");
+
     this.v.measurements.push({
       ...drawn,
       id,
@@ -149,20 +193,25 @@ export class MeasurementTool {
       midpoint: result.a.clone().lerp(result.b, 0.5),
     });
     this.cancelPending();
+    this.v.hideSnap();
     this.v.callbacks.onMeasure(result.distance, result.b.clone().sub(result.a));
     this.v.invalidate();
   }
   drawDistance(result, id, preview = false) {
-    const group = new THREE.Group(),
-      line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([result.a, result.b]),
-        new THREE.LineBasicMaterial({
-          color: preview ? 0x268cba : 0x247c62,
-          depthTest: false,
-        }),
-      );
-    line.renderOrder = 13;
-    group.add(line);
+    const group = new THREE.Group();
+    const chain = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    chain.classList.add("measure-chain");
+    if (preview) chain.classList.add("is-preview");
+    chain.setAttribute("aria-hidden", "true");
+    const paths = {};
+    for (const name of ["extension", "dimension", "ticks", "leader"]) {
+      const path = document.createElementNS(chain.namespaceURI, "path");
+      path.classList.add(`measure-${name}`);
+      chain.append(path);
+      paths[name] = path;
+    }
+    this.v.host.append(chain);
+    group.userData.measureChain = chain;
     for (const point of [result.a, result.b])
       group.add(
         this.overlay({ kind: "point", point }, preview ? 0x268cba : 0x247c62),
@@ -172,7 +221,7 @@ export class MeasurementTool {
     label.className = `measure-label${preview ? " measure-preview" : ""}`;
     const value = document.createElement("span");
     value.dataset.measureValue = "";
-    value.textContent = `${preview ? "" : `${id} · `}${this.format(result.distance)}`;
+    value.textContent = this.format(result.distance);
     label.append(value);
     if (!preview) {
       const remove = document.createElement("button");
@@ -190,9 +239,19 @@ export class MeasurementTool {
     this.v.host.append(label);
     const midpoint = result.a.clone().lerp(result.b, 0.5);
     this.positionLabel(label, midpoint);
-    return { group, line, label, midpoint, distance: result.distance };
+    return {
+      group,
+      line: paths.dimension,
+      chain,
+      paths,
+      label,
+      midpoint,
+      a: result.a.clone(),
+      b: result.b.clone(),
+      distance: result.distance,
+    };
   }
-  positionLabel(label, point, occupied = []) {
+  positionLabel(label, point, occupied = [], offset = { x: 0, y: 0 }) {
     const p = point.clone().project(this.v.camera);
     label.hidden =
       p.z > 1 || p.z < -1 || Math.abs(p.x) > 1 || Math.abs(p.y) > 1;
@@ -200,11 +259,11 @@ export class MeasurementTool {
     const width = label.offsetWidth || 100,
       height = label.offsetHeight || 22;
     const x = THREE.MathUtils.clamp(
-        (p.x * 0.5 + 0.5) * this.v.width,
+        (p.x * 0.5 + 0.5) * this.v.width + offset.x,
         width / 2 + 4,
         this.v.width - width / 2 - 4,
       ),
-      base = (-p.y * 0.5 + 0.5) * this.v.height;
+      base = (-p.y * 0.5 + 0.5) * this.v.height + offset.y;
     let top = base - height * 1.3;
     for (let i = 0; i < 100; i++) {
       const offset =
@@ -228,13 +287,96 @@ export class MeasurementTool {
     occupied.push({ x, top, width, height });
     label.style.left = `${x}px`;
     label.style.top = `${top + height * 1.3}px`;
+    return { x, y: top + height / 2, width, height };
+  }
+  layoutDimension(m, occupied) {
+    const project = (point) => {
+      const p = point.clone().project(this.v.camera);
+      return {
+        x: ((p.x + 1) * this.v.width) / 2,
+        y: ((1 - p.y) * this.v.height) / 2,
+        z: p.z,
+      };
+    };
+    const a = project(m.a),
+      b = project(m.b);
+    const behind = a.z < -1 || a.z > 1 || b.z < -1 || b.z > 1;
+    m.chain.style.display = behind ? "none" : "";
+    if (behind) {
+      m.label.hidden = true;
+      return;
+    }
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      length = Math.hypot(dx, dy);
+    let nx = length > 1 ? -dy / length : 0,
+      ny = length > 1 ? dx / length : -1;
+    if (ny > 0 || (Math.abs(ny) < 1e-6 && nx > 0)) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const offset = { x: nx * 32, y: ny * 32 };
+    const A = { x: a.x + offset.x, y: a.y + offset.y },
+      B = { x: b.x + offset.x, y: b.y + offset.y };
+    const segment = (p, q) =>
+      `M${p.x.toFixed(2)},${p.y.toFixed(2)}L${q.x.toFixed(2)},${q.y.toFixed(2)}`;
+    m.paths.extension.setAttribute(
+      "d",
+      [a, b]
+        .map((p) =>
+          segment(
+            { x: p.x + nx * 4, y: p.y + ny * 4 },
+            { x: p.x + nx * 38, y: p.y + ny * 38 },
+          ),
+        )
+        .join(""),
+    );
+    m.paths.dimension.setAttribute("d", segment(A, B));
+    const tx = length > 1 ? dx / length : 1,
+      ty = length > 1 ? dy / length : 0;
+    const tick = { x: (tx + nx) * 4, y: (ty + ny) * 4 };
+    m.paths.ticks.setAttribute(
+      "d",
+      [A, B]
+        .map((p) =>
+          segment(
+            { x: p.x - tick.x, y: p.y - tick.y },
+            { x: p.x + tick.x, y: p.y + tick.y },
+          ),
+        )
+        .join(""),
+    );
+    const box = this.positionLabel(m.label, m.midpoint, occupied, offset);
+    const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+    m.paths.leader.setAttribute(
+      "d",
+      box && Math.hypot(box.x - mid.x, box.y - mid.y) > 28
+        ? segment(mid, { x: box.x, y: box.y + box.height / 2 })
+        : "",
+    );
   }
   layoutLabels() {
+    // Position markers in screen space before painting: no sprite scaling lag,
+    // depth fighting, or differently sized symbols between projections.
+    for (const group of [
+      this.hoverOverlay,
+      this.firstOverlay,
+      this.preview?.group,
+      ...this.v.measurements.map((m) => m.group),
+    ]) {
+      group?.traverse((o) => {
+        const marker = o.userData.measureMarker;
+        if (!marker) return;
+        const p = o.userData.measurePoint.clone().project(this.v.camera);
+        marker.hidden =
+          Math.abs(p.x) > 1 || Math.abs(p.y) > 1 || p.z < -1 || p.z > 1;
+        marker.style.left = `${((p.x + 1) * this.v.width) / 2}px`;
+        marker.style.top = `${((1 - p.y) * this.v.height) / 2}px`;
+      });
+    }
     const occupied = [];
-    for (const m of this.v.measurements)
-      this.positionLabel(m.label, m.midpoint, occupied);
-    if (this.preview)
-      this.positionLabel(this.preview.label, this.preview.midpoint, occupied);
+    for (const m of this.v.measurements) this.layoutDimension(m, occupied);
+    if (this.preview) this.layoutDimension(this.preview, occupied);
   }
   clearPreview() {
     if (this.preview) {
@@ -264,7 +406,7 @@ export class MeasurementTool {
   updateLabels() {
     for (const m of this.v.measurements)
       m.label.querySelector("[data-measure-value]").textContent =
-        `${m.id} · ${this.format(m.distance)}`;
+        this.format(m.distance);
     if (this.preview)
       this.preview.label.querySelector("[data-measure-value]").textContent =
         this.format(this.preview.distance);
