@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@mlightcad/libredwg-web':
+        specifier: 0.7.15
+        version: 0.7.15
+      dxf-parser:
+        specifier: 1.1.2
+        version: 1.1.2
       three:
         specifier: 0.180.0
         version: 0.180.0
@@ -177,6 +183,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@mlightcad/libredwg-web@0.7.15':
+    resolution: {integrity: sha512-OblFsinWJcDacbQNPMAey6aIuHOrB2+ziUXvzJfix9XmBZ6461kDAiyz4jFs3hNxVc65Ojuqv15VPtSdfiggKA==}
+    engines: {node: '>=20'}
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
     engines: {node: ^22.20 || ^24.12 || >=25}
@@ -325,6 +335,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  dxf-parser@1.1.2:
+    resolution: {integrity: sha512-GPTumUvRkounlIazLIyJMmTWt+nlg+ksS0Hdm8jWvejmZKBTz6gvHTam76wRm4PQMma5sgKLThblQyeIJcH79Q==}
+
   esbuild@0.25.12:
     resolution: {integrity: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==}
     engines: {node: '>=18'}
@@ -343,6 +356,10 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
 
   nanoid@3.3.20:
     resolution: {integrity: sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ==}
@@ -499,6 +516,8 @@ snapshots:
   '@esbuild/win32-x64@0.25.12':
     optional: true
 
+  '@mlightcad/libredwg-web@0.7.15': {}
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
@@ -579,6 +598,10 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  dxf-parser@1.1.2:
+    dependencies:
+      loglevel: 1.9.2
+
   esbuild@0.25.12:
     optionalDependencies:
       '@esbuild/aix-ppc64': 0.25.12
@@ -614,6 +637,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  loglevel@1.9.2: {}
 
   nanoid@3.3.20: {}
 

@@ -30,7 +30,9 @@ export class SectionCaps {
   }
 
   update(planes, bounds, batches) {
-    const opaque = batches.filter((batch) => !batch.mesh.material.transparent);
+    const opaque = batches.filter(
+      (batch) => !batch.model.cadData && !batch.mesh.material.transparent,
+    );
     const changed =
       this.passes.length !== planes.length ||
       opaque.length !== this.batches.length ||

@@ -39,3 +39,18 @@ export function saveSettings(settings) {
     return false;
   }
 }
+
+export async function storePlacement(id, placement) {
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("files", "readwrite"),
+      store = tx.objectStore("files");
+    const request = store.get(id);
+    request.onsuccess = () => {
+      if (request.result) store.put({ ...request.result, placement });
+    };
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}

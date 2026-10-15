@@ -26,6 +26,20 @@ function clipPolygon(points, planes) {
   }
   return points;
 }
+function clipSegment(points, planes) {
+  let [start, end] = points;
+  for (const plane of planes) {
+    const a = plane.distanceToPoint(start),
+      b = plane.distanceToPoint(end);
+    if (a < -epsilon && b < -epsilon) return [];
+    if (a >= -epsilon !== b >= -epsilon) {
+      const point = start.clone().lerp(end, a / (a - b));
+      if (a < -epsilon) start = point;
+      else end = point;
+    }
+  }
+  return [start, end];
+}
 function intersectsTriangle(points, rect) {
   const corners = [
     [rect.left, rect.top],
@@ -154,14 +168,21 @@ export function selectInRectangle(
       for (
         let i = range.indexStart;
         i < range.indexStart + range.indexLength;
-        i += 3
+        i += batch.primitiveSize || 3
       ) {
-        const triangle = [0, 1, 2].map((offset) =>
-          new THREE.Vector3()
-            .fromBufferAttribute(position, batch.originalIndices[i + offset])
-            .applyMatrix4(batch.mesh.matrixWorld),
+        const triangle = (batch.primitiveSize === 2 ? [0, 1] : [0, 1, 2]).map(
+          (offset) =>
+            new THREE.Vector3()
+              .fromBufferAttribute(position, batch.originalIndices[i + offset])
+              .applyMatrix4(batch.mesh.matrixWorld),
         );
-        const polygon = clipPolygon(triangle, planes).map(project);
+        const polygon = (
+          batch.primitiveSize === 2
+            ? clipSegment(triangle, planes)
+            : clipPolygon(triangle, planes)
+        ).map(project);
+        if (batch.primitiveSize === 2 && polygon.length === 2)
+          polygon.push(polygon[1]);
         if (polygon.length < 3) continue;
         result.any = true;
         if (!crossing) {
@@ -231,7 +252,12 @@ function sectionTriangles(entries, plane) {
   const keyFor = (point) =>
     [point.x, point.y, point.z].map((v) => Math.round(v / tolerance)).join(",");
   for (const { batch, range } of entries) {
-    if (batch.mesh.material.transparent) continue;
+    if (
+      batch.primitiveSize === 2 ||
+      batch.model.cadData ||
+      batch.mesh.material.transparent
+    )
+      continue;
     const position = batch.mesh.geometry.attributes.position;
     for (
       let i = range.indexStart;

@@ -27,6 +27,8 @@ GitHub Actions kör tester och produktionsbygge vid ändringar i `main` och publ
 ## Funktioner
 
 - Flera IFC-modeller samtidigt, bearbetade i en worker med web-ifc.
+- DXF och DWG som CAD-referenser i samma 3D-vy: linjer, 3D-polylinjer, bågar, cirklar, block, text samt fyllda 3DFACE-, SOLID/TRACE-, polyface-, polygonmesh- och MESH-ytor med bibehållna höjder, med tänd/släck per lager och objekt. Enhet, höjd, förskjutning och rotation sparas lokalt. DWG 3DSOLID konverteras automatiskt till mesh lokalt, med bevarade lager, färger, blockplacering och mjuka normaler. Ofullständiga solider och objekttyper utan stöd redovisas.
+- Inspektorn fälls ihop med pilen överst i flikraden. Flikraden ligger kvar och val av flik öppnar panelen igen.
 - Geometri grupperad i renderingsbatcher med bibehållen objektidentitet.
 - Modellträd som följer IFC-filens rumsliga struktur, med sökning och objekttypfilter.
 - Väljare för IFC-struktur, system, zoner och objekttyper med gemensam synlighet mellan indelningarna.
@@ -54,3 +56,11 @@ Ingen inloggning, molnlagring, delning eller ärendehantering. Snitt har fyllda,
 Representativa stora modeller behöver provas innan någon övre modellstorlek eller FPS-nivå utlovas.
 
 Specifikation och designreferens finns i `docs/specifikation.md` och `docs/design/modellvisare-koncept-v2.png`.
+
+## CAD-komponenter
+
+DXF-parsern använder [dxf-parser 1.1.2](https://github.com/gdsestimating/dxf-parser) (MIT). DWG läses lokalt i en separat worker med [@mlightcad/libredwg-web 0.7.15](https://github.com/mlightcad/libredwg-web) och GNU LibreDWG (GPL-3.0); respektive projekts licens- och källkodsvillkor gäller för dessa komponenter. Endast DWG-import laddar DWG-läsaren och dess WASM-fil. Ingen ritningsdata skickas till en konverteringstjänst. DXF-expansionen för 2D-objekt är anpassad från LiraStructureWeb.
+
+DWG-solidkonverterarens källkod och bygginstruktioner finns i [tools/solid-mesh](tools/solid-mesh/README.md). Den använder opencadcodec och opencadkernel (MPL-2.0); genererad JS/WASM ligger i src/solid-mesh och laddas enbart när DWG-solider behöver konverteras.
+
+Demomodellen innehåller också DWG_Solider.dwg med låda, cylinder, sfär och ring. De konverteras via den vanliga DWG-importen och visas framför byggnaden, med DWG-referensen överst i modellträdet.

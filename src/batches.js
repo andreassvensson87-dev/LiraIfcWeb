@@ -7,7 +7,7 @@ export function buildBatches(model) {
   const groups = new Map();
   for (const part of model.parts) {
     const opacity = part.opacity < 0.95 ? Math.max(0.12, part.opacity) : 1;
-    const key = opacity.toFixed(2);
+    const key = `${opacity.toFixed(2)}:${part.lines ? "lines" : "mesh"}:${part.texture?.uuid || ""}:${part.smooth ? "smooth" : "flat"}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(part);
   }
@@ -19,12 +19,13 @@ export function buildBatches(model) {
       chunk.push(part);
       vertices += part.positions.length / 3;
       if (vertices > 250000) {
-        batches.push(makeBatch(model, chunk, Number(opacity)));
+        batches.push(makeBatch(model, chunk, Number(opacity.split(":")[0])));
         chunk = [];
         vertices = 0;
       }
     }
-    if (chunk.length) batches.push(makeBatch(model, chunk, Number(opacity)));
+    if (chunk.length)
+      batches.push(makeBatch(model, chunk, Number(opacity.split(":")[0])));
   }
   model.parts = [];
   return batches;
@@ -33,6 +34,7 @@ function makeBatch(model, parts, opacity) {
   const vertices = parts.reduce((n, p) => n + p.positions.length, 0);
   const indexCount = parts.reduce((n, p) => n + p.indices.length, 0);
   const positions = new Float32Array(vertices),
+    uvs = parts[0].texture ? new Float32Array((vertices / 3) * 2) : null,
     normals = new Float32Array(vertices),
     colors = new Float32Array(vertices);
   const indices = new Uint32Array(indexCount),
@@ -45,6 +47,7 @@ function makeBatch(model, parts, opacity) {
     const object = model.objectMap.get(part.id);
     positions.set(part.positions, vOffset);
     normals.set(part.normals, vOffset);
+    if (part.uvs) uvs.set(part.uvs, (vOffset / 3) * 2);
     const rgb = new THREE.Color(...part.color).convertSRGBToLinear().toArray();
     for (let j = 0; j < part.positions.length; j += 3) {
       colors.set(rgb, vOffset + j);
@@ -65,6 +68,8 @@ function makeBatch(model, parts, opacity) {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  if (parts[0].texture)
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.setIndex(new THREE.BufferAttribute(indices.slice(), 1));
@@ -74,15 +79,33 @@ function makeBatch(model, parts, opacity) {
     vertexColors: true,
     side: THREE.DoubleSide,
     roughness: 0.78,
+    flatShading: !!model.cadData && !parts[0].smooth,
     metalness: 0.06,
     transparent: opacity < 1,
     opacity,
     depthWrite: opacity === 1,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  let drawMaterial = material;
+  if (parts[0].lines || parts[0].texture) {
+    material.dispose();
+    drawMaterial = parts[0].lines
+      ? new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false })
+      : new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          map: parts[0].texture,
+          side: THREE.DoubleSide,
+          transparent: true,
+          alphaTest: 0.1,
+          depthWrite: false,
+        });
+  }
+  const mesh = parts[0].lines
+    ? new THREE.LineSegments(geometry, drawMaterial)
+    : new THREE.Mesh(geometry, drawMaterial);
   mesh.frustumCulled = true;
   const batch = {
     mesh,
+    primitiveSize: parts[0].lines ? 2 : 3,
     model,
     ranges,
     originalIndices: indices,
@@ -111,7 +134,7 @@ export function updateBatchVisibility(batch, hidden, isolated) {
       offset,
     );
     faceObjects.push({
-      end: (offset + range.indexLength) / 3,
+      end: (offset + range.indexLength) / (batch.primitiveSize || 3),
       object: range.object,
     });
     offset += range.indexLength;
@@ -168,6 +191,7 @@ export function highlightBatch(batch, selected, colorMode) {
 }
 export function disposeBatch(batch) {
   batch.mesh.geometry.dispose();
+  batch.mesh.material.map?.dispose();
   batch.mesh.material.dispose();
   if (batch.edges) {
     batch.edges.geometry.dispose();

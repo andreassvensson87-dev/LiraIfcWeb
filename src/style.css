@@ -310,10 +310,13 @@ h2 {
   overflow: hidden;
 }
 .workbench.panel-collapsed {
-  grid-template-columns: minmax(0, 1fr) 0;
+  grid-template-columns: minmax(0, 1fr) 40px;
 }
 .workbench.panel-collapsed .inspector {
-  visibility: hidden;
+  grid-template-columns: 0 40px;
+}
+.workbench.panel-collapsed .inspector-content {
+  display: none;
 }
 #viewport {
   position: relative;
@@ -344,13 +347,6 @@ h2 {
   background: transparent;
   flex-shrink: 0;
 }
-.panel-toggle {
-  position: absolute;
-  right: 13px;
-  bottom: 16px;
-  z-index: 3;
-  background: #ffffffd9;
-}
 .inspector {
   background: white;
   border-left: 1px solid var(--border);
@@ -366,13 +362,29 @@ h2 {
   scrollbar-width: thin;
   scrollbar-color: #d2dfe0 transparent;
 }
-.inspector-tabs {
+.inspector-rail {
+  grid-column: 2;
   border-left: 1px solid #e7edee;
   background: #fcfdfd;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  padding: 8px 3px;
   gap: 8px;
-  padding: 12px 4px;
+}
+.inspector-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inspector-collapse {
+  width: 32px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+}
+.panel-collapsed .inspector-collapse svg {
+  transform: rotate(180deg);
 }
 .inspector-tab {
   width: 32px;
@@ -1353,10 +1365,18 @@ dialog .primary {
     height: 17px;
   }
   .workbench {
-    grid-template-columns: minmax(0, 1fr) 0;
+    grid-template-columns: minmax(0, 1fr) 40px;
   }
-  .inspector {
-    visibility: hidden;
+  .workbench .inspector {
+    grid-template-columns: 0 40px;
+    visibility: visible;
+  }
+  .workbench.panel-collapsed .inspector {
+    position: static;
+    width: auto;
+  }
+  .workbench:not(.panel-collapsed) .inspector {
+    grid-template-columns: minmax(0, 1fr) 40px;
   }
   .workbench:not(.panel-collapsed) .inspector {
     position: absolute;
@@ -1402,9 +1422,6 @@ dialog .primary {
   }
 }
 @media (max-width: 640px) {
-  .panel-toggle {
-    z-index: 9;
-  }
 }
 
 .object-menu {
@@ -1594,4 +1611,114 @@ dialog .primary {
   .view-cube {
     transition: none;
   }
+}
+
+#cad-placement-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.cad-placement-filename {
+  overflow-wrap: anywhere;
+}
+.cad-placement label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.cad-placement input,
+.cad-placement select {
+  width: 100%;
+  padding: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+.cad-placement p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.measurement-modes {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.measurement-modes label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.measurement-modes select {
+  padding: 6px;
+  font-size: 12px;
+  min-width: 70px;
+}
+.snap-settings {
+  margin: 12px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.snap-settings summary {
+  font-size: 12px;
+  cursor: pointer;
+}
+.snap-settings label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 7px;
+  font-size: 12px;
+}
+.tool-hud .measurement-modes {
+  margin: 0;
+}
+.tool-hud label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+}
+.tool-hud select,
+.tool-hud input {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px;
+  max-width: 120px;
+}
+.tool-hud {
+  flex-wrap: wrap;
+}
+.snap-badge {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 4px 7px;
+  border: 1px solid #62ac95;
+  border-radius: 4px;
+  background: #f4fffaed;
+  color: #175540;
+  font-size: 11px;
+  box-shadow: 0 2px 8px #102c3020;
+}
+.measure-remove {
+  pointer-events: auto;
+  border: 0;
+  background: none;
+  color: #346456;
+  padding: 0 0 0 7px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.measure-preview {
+  color: #23799b;
+  border-color: #88bfce;
 }

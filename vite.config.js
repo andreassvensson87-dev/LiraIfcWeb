@@ -5,6 +5,7 @@ const version = randomUUID();
 // Relative assets and version checks support GitHub Pages and local preview.
 export default defineConfig({
   base: "./",
+  worker: { format: "es" },
   define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
     {

@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import "./style.css";
 import { watchAppUpdate } from "./app-update.js";
+import { buildCadModel, initialCadOrigin } from "./cad-model.js";
 import { icon } from "./icons.js";
+import { geometryNames } from "./measurement-tool.js";
+import { snapNames } from "./snap-resolver.js";
 import { Viewer } from "./viewer.js";
 import { createDemoModels } from "./demo.js";
 import {
@@ -32,6 +35,7 @@ import {
 import {
   storedFiles,
   storeFile,
+  storePlacement,
   deleteFile,
   readSettings,
   saveSettings,
@@ -43,6 +47,10 @@ const state = {
   models: [],
   selected: new Set(),
   selectedBranches: new Map(),
+  placementHistory: [],
+  showMoveUndo: false,
+  undoBusy: false,
+  undoTask: Promise.resolve(),
   hidden: new Set(),
   isolated: null,
   tab: "models",
@@ -66,10 +74,10 @@ $("#app").innerHTML = `
   <header class="header">
     <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="LiraIFC"><img src="${import.meta.env.BASE_URL}lira-icon.svg" alt=""/><strong>Lira<span>IFC</span></strong></a>
     <div class="header-divider"></div><span class="workspace-title">Modellgranskning</span><span class="viewer-badge">VIEWER</span>
-    <div class="header-right"><button id="app-update" class="lira-update" title="En ny version finns tillgänglig" hidden>Uppdatera appen</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna IFC</button></div>
+    <div class="header-right"><button id="app-update" class="lira-update" title="En ny version finns tillgänglig" hidden>Uppdatera appen</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna modell</button></div>
   </header>
   <nav class="ribbon" aria-label="Modellverktyg">
-    <div class="ribbon-group"><div class="commands">${command("open", "Öppna IFC", "folder")}${command("demo", "Demomodell", "models")}</div><span class="group-label">Modell</span></div>
+    <div class="ribbon-group"><div class="commands">${command("open", "Öppna modell", "folder")}${command("demo", "Demomodell", "models")}</div><span class="group-label">Modell</span></div>
     <div class="ribbon-group"><div class="commands">${command("isolate", "Isolera", "isolate", "data-selection")}${command("hide", "Dölj", "hide", "data-selection")}${command("show-all", "Visa alla", "eye")}</div><span class="group-label">Urval</span></div>
     <div class="ribbon-group"><div class="commands">${command("measure", "Mät", "ruler", 'aria-pressed="false"')}${command("section", "Snitt", "cut", 'aria-pressed="false"')}${command("section-box", "Snittbox", "box", 'aria-pressed="false"')}</div><span class="group-label">Granska</span></div>
     <div class="ribbon-group"><div class="commands">${command("edges", "Kantlinjer", "models", 'aria-pressed="false"')}<div class="command-stack"><label class="ribbon-select">Färgsättning<select id="color-mode" aria-label="Färgsättning"><option value="original">Original</option><option value="discipline">Disciplin</option><option value="type">Objekttyp</option></select></label><button class="compact" data-action="grid" aria-pressed="true">${icon("grid")} Rutnät</button></div></div><span class="group-label">Utseende</span></div>
@@ -78,15 +86,14 @@ $("#app").innerHTML = `
   <main class="workbench">
     <section id="viewport" aria-label="Modellvy">
       <div id="object-menu" class="object-menu" role="menu" aria-label="Markerade objekt" hidden></div>
-      <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna en IFC-modell eller släpp flera filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna IFC</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
-      <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp dina IFC-filer här</strong><span>Öppna flera modeller tillsammans</span></div>
+      <div id="empty" class="empty-state" hidden>${icon("models")}<h1>Hela modellen. Alla detaljer.</h1><p>Öppna IFC, DXF eller DWG eller släpp filer här<br/>för att granska dem tillsammans.</p><button class="primary" data-action="open">${icon("folder")} Öppna modell</button><button class="text-button" data-action="demo">Prova demomodellen</button><small>Filerna stannar på din enhet.</small></div>
+      <div id="drop-zone" class="drop-zone" hidden>${icon("folder")}<strong>Släpp IFC, DXF eller DWG här</strong><span>Modeller och ritningsreferenser tillsammans</span></div>
       <div id="loading" class="loading-card" role="status" hidden><span class="spinner"></span><div><strong id="loading-name"></strong><span id="loading-status">Läser modell…</span></div></div>
       <div id="tool-hud" class="tool-hud" hidden></div>
-      <button class="panel-toggle icon-button" data-action="toggle-panel" title="Visa eller dölj inspektorn" aria-label="Visa eller dölj inspektorn">${icon("properties")}</button>
     </section>
     <aside class="inspector" aria-label="Högerinspektor">
       <div class="inspector-content"><div id="panel-content"></div></div>
-      <div class="inspector-tabs" role="tablist" aria-label="Inspektorpaneler" aria-orientation="vertical">
+      <div class="inspector-rail"><button class="inspector-collapse icon-button" data-action="toggle-panel" aria-label="Fäll ihop inspektorn" title="Fäll ihop inspektorn" aria-expanded="true" aria-controls="panel-content">${icon("chevron")}</button><div class="inspector-tabs" role="tablist" aria-label="Inspektorpaneler" aria-orientation="vertical">
         ${[
           ["models", "Modeller", "tree"],
           ["properties", "Egenskaper", "properties"],
@@ -98,14 +105,15 @@ $("#app").innerHTML = `
               `<button class="inspector-tab" role="tab" id="tab-${tab}" aria-controls="panel-content" aria-selected="${tab === "models"}" tabindex="${tab === "models" ? 0 : -1}" data-tab="${tab}" title="${label}" aria-label="${label}">${icon(glyph)}</button>`,
           )
           .join("")}
-      </div>
+      </div></div>
     </aside>
   </main>
   <footer class="statusbar"><div class="status-counts"><span id="model-count">0 modeller</span><span id="object-count">0 objekt</span><span id="selection-count">Inget valt</span></div><span id="status-message" role="status">Öppnar viewer…</span><div class="view-controls"><select id="projection" aria-label="Projektion"><option value="perspective">Perspektiv</option><option value="orthographic">Ortografisk</option></select><select id="level-filter" aria-label="Våning"><option value="">Alla våningar</option></select><button class="compact" data-action="fit">${icon("fit")} Passa vy</button><span class="unit-label">m</span></div></footer>
-  <input id="file-input" type="file" accept=".ifc" multiple hidden />
+  <input id="file-input" type="file" accept=".ifc,.dxf,.dwg" multiple hidden />
   <div id="toast" class="toast" role="status" hidden></div>
-  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Rektangelmarkering</dt><dd>Vänsterdra. Blå ruta väljer helt inneslutna objekt, grön ruta väljer berörda objekt. Shift lägger till; Esc avbryter.</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mätning använder meter. Grön punkt markerar snap till en triangelhörnpunkt. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
+  <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Rektangelmarkering</dt><dd>Vänsterdra. Blå ruta väljer helt inneslutna objekt, grön ruta väljer berörda objekt. Shift lägger till; Esc avbryter.</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mått kan visas i meter, centimeter eller millimeter. Snapmarkören visar typen av geometripunkt; Tab växlar mellan alternativ. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Inställningar</h2>${small("close-dialog", "Stäng", "close")}</div><fieldset class="navigation-settings"><legend>Navigationsinställningar</legend><label class="field-label">Inmatning<select id="navigation-device"><option value="mouse">Mus</option><option value="trackpad">Styrplatta</option></select></label><label class="field-label" for="navigation-zoom-speed">Zoomhastighet <output id="navigation-zoom-value" for="navigation-zoom-speed">100 %</output><input id="navigation-zoom-speed" aria-label="Zoomhastighet" type="range" min="25" max="400" step="5" value="100"/></label><button class="text-button" data-action="reset-zoom-speed">Återställ zoomhastighet</button><label class="navigation-toggle"><span>Invertera zoomriktning</span><input id="navigation-zoom-inverted" type="checkbox"/></label><label class="navigation-toggle"><span>Dämpad orbit</span><input id="navigation-orbit-damping" type="checkbox" checked/></label><p class="muted">Inställningarna sparas automatiskt. Invertering gäller scrollzoom; nypning behåller sin naturliga riktning.</p></fieldset><button class="primary" data-action="close-dialog">Stäng</button></dialog>
+  <dialog id="cad-placement-dialog" aria-labelledby="cad-placement-title"></dialog>
   <dialog id="view-dialog"><form id="view-form"><div class="dialog-heading"><h2>Spara aktuell vy</h2>${small("close-dialog", "Stäng", "close", 'type="button"')}</div><label>Namn på vyn<input id="view-name" required maxlength="80" autocomplete="off" placeholder="Exempel: Stomme – plan 02"/></label><p class="muted">Kamera, modeller, synlighet och snitt sparas på din enhet.</p><button class="primary" type="submit">${icon("save")} Spara vy</button></form></dialog>
 `;
 
@@ -118,11 +126,24 @@ try {
       if (object) openObjectMenu(object, event);
       else openBackgroundMenu(event);
     },
-    onMeasureStart: () => status("Välj andra punkten. Esc avbryter."),
+    onPointMoveCancel: () => {
+      toolState();
+      status("Flytt avbruten.");
+    },
+    onMeasureStart: () => {
+      toolState();
+      renderPanel();
+      status("Välj andra geometrin. Esc avbryter pågående mått.");
+    },
+    onMeasureChange: () => {
+      toolState();
+      renderPanel();
+    },
     onMeasure: (distance) => {
       status(
-        `Avstånd: ${format(distance)} m. Välj två punkter för nästa mått.`,
+        `Avstånd: ${viewer.measureTool.format(distance)}. Välj geometri för nästa mått.`,
       );
+      toolState();
       renderPanel();
     },
     onError: notify,
@@ -173,6 +194,14 @@ function selectedObjects() {
 function modelFor(object) {
   return state.models.find((m) => m.id === object.modelId);
 }
+function setPanelCollapsed(collapsed) {
+  $(".workbench").classList.toggle("panel-collapsed", collapsed);
+  const button = $(".inspector-collapse");
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.title = button.ariaLabel = collapsed
+    ? "Öppna inspektorn"
+    : "Fäll ihop inspektorn";
+}
 function setTab(tab) {
   state.tab = tab;
   if (tab === "properties") selectedObjects().forEach(requestProperties);
@@ -181,10 +210,12 @@ function setTab(tab) {
     button.setAttribute("aria-selected", active);
     button.tabIndex = active ? 0 : -1;
   });
-  $(".workbench").classList.remove("panel-collapsed");
+  setPanelCollapsed(false);
   renderPanel();
 }
 function registerModel(model) {
+  if (!model.cadData)
+    model.placement ||= { x: 0, z: 0, elevation: 0, rotation: 0 };
   model.objectMap = new Map();
   for (const object of model.objects) {
     object.key = objectKey(model.id, object.expressId);
@@ -240,9 +271,13 @@ function refresh() {
       b.disabled = !state.models.length;
     });
   const currentLevel = $("#level-filter").value;
-  const levels = [...new Set(allObjects().map((o) => o.level))].sort((a, b) =>
-    a.localeCompare(b, "sv", { numeric: true }),
-  );
+  const levels = [
+    ...new Set(
+      state.models
+        .filter((model) => !model.cadData)
+        .flatMap((model) => model.objects.map((object) => object.level)),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "sv", { numeric: true }));
   $("#level-filter").innerHTML =
     '<option value="">Alla våningar</option>' +
     levels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
@@ -300,6 +335,9 @@ function openObjectMenu(object, event, branch = null) {
       ["show-selection", "Visa", "eye"],
       ["hide", "Göm", "hide"],
       [branch ? "isolate-branch" : "isolate", "Isolera", "isolate"],
+      ...(branch && !branch.node
+        ? [["cad-placement", "Placering…", "settings", false, branch.model.id]]
+        : []),
     ],
     event,
   );
@@ -310,6 +348,12 @@ function openBackgroundMenu(event) {
     [
       ["show-all", "Visa alla", "eye", !state.models.length],
       ["fit", "Anpassa modell", "fit", !state.models.length],
+      [
+        "clear-measures",
+        "Rensa mått",
+        "ruler",
+        !viewer.measurements.length && !viewer.measureTool.first,
+      ],
       [
         "fullscreen",
         document.fullscreenElement ? "Avsluta helskärm" : "Helskärm",
@@ -329,8 +373,8 @@ function showContextMenu(title, items, event) {
     `<div class="object-menu-title">${title}</div>` +
     items
       .map(
-        ([action, label, glyph, disabled]) =>
-          `<button role="menuitem" data-action="${action}" ${disabled ? "disabled" : ""}>${icon(glyph)}${label}</button>`,
+        ([action, label, glyph, disabled, modelId]) =>
+          `<button role="menuitem" data-action="${action}" ${modelId ? `data-model="${esc(modelId)}"` : ""} ${disabled ? "disabled" : ""}>${icon(glyph)}${label}</button>`,
       )
       .join("");
   menu.hidden = false;
@@ -401,7 +445,12 @@ function selectObject(object, additive = false) {
 }
 let requestId = 0;
 function requestProperties(object) {
-  if (object.demoProperties || state.props.has(object.key)) return;
+  if (
+    object.referenceProperties ||
+    object.demoProperties ||
+    state.props.has(object.key)
+  )
+    return;
   const model = modelFor(object);
   if (!model?.worker) return;
   state.props.set(object.key, { loading: true });
@@ -479,14 +528,141 @@ function modelsPanel() {
       )
       .join("")}</select></label>
     <select id="type-filter" class="type-filter" aria-label="Filtrera objekttyp"><option value="">Alla objekttyper</option>${types.map((type) => `<option value="${esc(type)}" ${state.type === type ? "selected" : ""}>${esc(type)}</option>`).join("")}</select>
-    ${!state.models.length ? '<div class="panel-empty">Inga modeller öppna.<br/>Öppna IFC för att börja granska.</div>' : ""}
+    ${!state.models.length ? '<div class="panel-empty">Inga modeller öppna.<br/>Öppna modell för att börja granska.</div>' : ""}
     ${
       queryActive
         ? `<div class="results-label">${treeSearchCount().toLocaleString("sv")} träffar</div>`
         : ""
     }
     <div class="model-tree">${state.models.map((model) => `<details data-tree="${model.id}" ${queryActive || state.expanded.has(model.id) ? "open" : ""}><summary class="model-root ${state.selectedBranches.has(branchKey(model)) ? "selected-branch" : ""}">${icon("folder")}<span class="model-filename" title="${esc(model.name)} · ${model.objects.length.toLocaleString("sv")} objekt · ${esc(model.schema)}">${esc(model.name)}</span>${visibilityButton(model, model.objects)}${small("remove-model", `Ta bort ${model.name}`, "close", `data-model="${model.id}"`)}</summary>${model.trees[state.grouping].roots.map((node) => renderTreeNode(model, node)).join("")}${model.groupWarning && ["systems", "zones"].includes(state.grouping) ? `<p class="muted">${esc(model.groupWarning)}</p>` : ""}</details>`).join("")}</div>
-    <div class="panel-note">${icon("properties")}<span>${state.models.some((model) => model.demo) ? "Demomodell · genererad geometri för att prova viewern." : "IFC-filer bearbetas och sparas lokalt i denna webbläsare."}</span></div>`;
+    <div class="panel-note">${icon("properties")}<span>${state.models.some((model) => model.demo) ? "Demomodell · genererad geometri för att prova viewern." : "Filer bearbetas och sparas lokalt i denna webbläsare."}</span></div>`;
+}
+function cadPlacementPanel(model) {
+  const p = model.placement;
+  const units = [
+    [0.001, "Millimeter"],
+    [0.01, "Centimeter"],
+    [1, "Meter"],
+    [0.0254, "Tum"],
+    [0.3048, "Fot"],
+  ];
+  return `<div class="cad-placement">${model.cadData ? `<label>Enhet<select aria-label="Enhet för ${esc(model.name)}" data-cad-model="${model.id}" data-placement="unitFactor">${units.map(([factor, name]) => `<option value="${factor}" ${p.unitFactor === factor ? "selected" : ""}>${name}</option>`).join("")}</select></label>` : ""}${[
+    ["x", "X-förskjutning (m)"],
+    ["z", "Z-förskjutning (m)"],
+    ["elevation", "Höjd (m)"],
+    ["rotation", "Rotation (°)"],
+  ]
+    .map(
+      ([key, label]) =>
+        `<label>${label}<input type="number" step="any" aria-label="${label} för ${esc(model.name)}" value="${p[key]}" data-cad-model="${model.id}" data-placement="${key}"/></label>`,
+    )
+    .join(
+      "",
+    )}<button class="wide-button" data-action="pick-placement" data-model="${model.id}">${icon("cursor")} Flytta med två punkter</button><button class="compact" data-action="undo-placement" data-model="${model.id}" ${state.placementHistory.some((entry) => entry.model === model) ? "" : "disabled"}>Ångra flytt</button><button class="compact" data-action="center-cad" data-model="${model.id}">${icon("fit")} Placera vid modellen</button><p class="muted">${model.cadData ? `Ritningens XY visas i modellens XZ-plan; Z blir höjd. ${model.cadData.unitKnown ? "" : "Filen saknar känd enhet; kontrollera vald enhet."}` : "Förskjutning anges i meter. Rotation sker runt den gemensamma modellnollpunkten."}</p>${model.cadData?.skipped.length ? `<p class="muted">Importanmärkningar: ${esc(model.cadData.skipped.join(", "))}</p>` : ""}</div>`;
+}
+function openCadPlacement(model) {
+  if (!model) return;
+  viewer.setTool("select");
+  toolState();
+  const dialog = $("#cad-placement-dialog");
+  dialog.dataset.model = model.id;
+  dialog.innerHTML = `<div class="dialog-heading"><h2 id="cad-placement-title">Placering</h2>${small("close-dialog", "Stäng", "close")}</div><p class="cad-placement-filename">${esc(model.name)}</p>${cadPlacementPanel(model)}<p class="muted">Inställningarna sparas automatiskt.</p><button class="primary" data-action="close-dialog">Stäng</button>`;
+  dialog.showModal();
+}
+function syncCadPlacementFields(model) {
+  const undoButton = $("#cad-placement-dialog").querySelector(
+    '[data-action="undo-placement"]',
+  );
+  if (undoButton?.dataset.model === model.id)
+    undoButton.disabled =
+      state.undoBusy ||
+      !state.placementHistory.some((entry) => entry.model === model);
+  $("#cad-placement-dialog")
+    .querySelectorAll("[data-placement]")
+    .forEach((input) => {
+      if (input.dataset.cadModel === model.id)
+        input.value = model.placement[input.dataset.placement];
+    });
+}
+$("#cad-placement-dialog").addEventListener("close", () => {
+  const id = $("#cad-placement-dialog").dataset.model;
+  document
+    .querySelector(
+      `.model-tree > details[data-tree="${CSS.escape(id)}"] > summary`,
+    )
+    ?.focus({ preventScroll: true });
+});
+async function applyCadPlacement(model, values, recordHistory = true) {
+  const before = { ...model.placement };
+  const placement = { ...model.placement, ...values };
+  if (
+    !Object.values(placement).every(Number.isFinite) ||
+    placement.unitFactor <= 0 ||
+    Object.values(placement).some((value) => Math.abs(value) > 1e9)
+  ) {
+    notify("Ange giltig enhet och placering.");
+    syncCadPlacementFields(model);
+    renderPanel();
+    return false;
+  }
+  if (Object.keys(placement).every((key) => placement[key] === before[key]))
+    return false;
+  if (model.cadData) {
+    const next = buildCadModel({ ...model, placement });
+    const index = state.models.indexOf(model);
+    viewer.removeModel(model);
+    state.models.splice(index, 1);
+    Object.assign(model, next);
+    registerModel(model);
+    state.models.splice(state.models.indexOf(model), 1);
+    state.models.splice(index, 0, model);
+    for (const [key, branch] of state.selectedBranches)
+      if (branch.model === model) state.selectedBranches.delete(key);
+  } else {
+    viewer.setModelPlacement(model, placement);
+  }
+  if (recordHistory) {
+    state.placementHistory.push({ model, before });
+    if (state.placementHistory.length > 50) state.placementHistory.shift();
+  }
+  refresh();
+  syncCadPlacementFields(model);
+  toolState();
+  viewer.fit();
+  try {
+    await storePlacement(model.id, placement);
+  } catch {
+    notify("Placeringen ändrades men kunde inte sparas lokalt.");
+  }
+  return true;
+}
+function undoPlacement(modelId) {
+  state.undoTask = state.undoTask
+    .then(() => performUndoPlacement(modelId))
+    .catch((error) => notify(error.message));
+  return state.undoTask;
+}
+async function performUndoPlacement(modelId) {
+  if (state.undoBusy) return;
+  const index = state.placementHistory.findLastIndex(
+    (entry) => !modelId || entry.model.id === modelId,
+  );
+  if (index < 0) return;
+  const [entry] = state.placementHistory.splice(index, 1);
+  state.undoBusy = true;
+  viewer.setTool("select");
+  try {
+    await applyCadPlacement(entry.model, entry.before, false);
+    status(`Flytt ångrad · ${entry.model.name}`);
+  } catch (error) {
+    state.placementHistory.splice(index, 0, entry);
+    notify(error.message);
+  } finally {
+    state.undoBusy = false;
+    state.showMoveUndo = state.placementHistory.length > 0;
+    syncCadPlacementFields(entry.model);
+    toolState();
+  }
 }
 function objectRow(o) {
   const visible =
@@ -519,8 +695,8 @@ function propertiesPanel() {
     props = state.props.get(o.key);
   const size = o.bounds.getSize(new THREE.Vector3());
   let sets = "";
-  if (o.demoProperties)
-    sets = `<details class="property-set" open><summary>Objektdata</summary>${propRows(Object.entries(o.demoProperties))}</details>`;
+  if (o.referenceProperties || o.demoProperties)
+    sets = `<details class="property-set" open><summary>Objektdata</summary>${propRows(Object.entries(o.referenceProperties || o.demoProperties))}</details>`;
   else if (props?.loading)
     sets =
       '<p class="muted"><span class="spinner small-spinner"></span> Läser IFC-egenskaper…</p>';
@@ -543,9 +719,9 @@ function propertiesPanel() {
   return `<div class="panel-heading"><h1>Egenskaper</h1>${small("clear-selection", "Avmarkera", "close")}</div><div class="selected-card"><span class="eyebrow">${esc(o.ifcClass)}</span><h2>${esc(o.name)}</h2>${propRows(
     [
       ["Modell", model.name],
-      ["Våning", o.level],
-      ["GlobalId", o.globalId || "—"],
-      ["Express ID", o.expressId],
+      [model.cadData ? "Lager" : "Våning", o.level],
+      ...(!model.cadData ? [["GlobalId", o.globalId || "—"]] : []),
+      [model.cadData ? "Objekt-ID" : "Express ID", o.expressId],
     ],
   )}</div><div class="panel-actions"><button class="compact" data-action="focus-selection">${icon("fit")} Fokusera</button><button class="compact" data-action="isolate">${icon("isolate")} Isolera</button></div>${sets}<details class="property-set"><summary>Geometrins utbredning</summary>${propRows(
     [
@@ -557,6 +733,25 @@ function propertiesPanel() {
 }
 function viewsPanel() {
   return `<div class="panel-heading"><h1>Sparade vyer</h1>${small("save-view", "Spara aktuell vy", "plus")}</div><p class="panel-intro">Återvänd till samma kamera, synlighet och snitt.</p>${!state.views.length ? '<div class="panel-empty">Inga sparade vyer ännu.<br/>Ställ in modellen och välj Spara vy.</div>' : state.views.map((view) => `<article class="saved-view"><button class="view-preview" data-action="restore-view" data-view="${view.id}" ${canRestoreView(view, state.models) ? "" : "disabled"}>${view.image ? `<img src="${view.image}" alt="${esc(view.name)}"/>` : icon("camera")}</button><div><button class="view-title" data-action="restore-view" data-view="${view.id}">${esc(view.name)}</button><span>${canRestoreView(view, state.models) ? `${view.modelIds.length} modeller · ${new Date(view.date).toLocaleDateString("sv")}` : "Öppna vyns modeller för att återställa"}</span>${small("delete-view", "Ta bort vy", "trash", `data-view="${view.id}"`)}</div></article>`).join("")}<div class="panel-note">${icon("save")}<span>Vyer och modeller sparas i den här webbläsaren.</span></div>`;
+}
+function measurementModes() {
+  return `<div class="measurement-modes">${viewer.measureTool.modes
+    .map(
+      (kind, index) =>
+        `<label>Val ${index + 1}<select data-measure-mode="${index}" aria-label="Mätgeometri ${index + 1}">${Object.entries(
+          geometryNames,
+        )
+          .map(
+            ([key, name]) =>
+              `<option value="${key}" ${kind === key ? "selected" : ""}>${name}</option>`,
+          )
+          .join("")}</select></label>`,
+    )
+    .join("")}</div>`;
+}
+function measurementSettings() {
+  const tool = viewer.measureTool;
+  return `${measurementModes()}<div class="measurement-modes"><label>Enhet<select data-measure-unit aria-label="Måttenhet">${["m", "cm", "mm"].map((unit) => `<option ${unit === tool.unit ? "selected" : ""}>${unit}</option>`).join("")}</select></label><label>Decimaler<select data-measure-decimals aria-label="Antal decimaler">${[0, 1, 2, 3, 4].map((n) => `<option ${n === tool.decimals ? "selected" : ""}>${n}</option>`).join("")}</select></label></div><details class="snap-settings"><summary>Snappning</summary>${["enabled", "endpoint", "midpoint", "center", "perpendicular", "edge", "surface"].map((key) => `<label><input type="checkbox" data-snap-setting="${key}" ${viewer.snap.settings[key] ? "checked" : ""}/> ${key === "enabled" ? "Aktivera snap" : snapNames[key]}</label>`).join("")}<p class="muted">Tab växlar mellan närliggande snapalternativ. Endast synlig geometri används.</p></details>`;
 }
 function reviewPanel() {
   const s = viewer.section;
@@ -572,7 +767,7 @@ function reviewPanel() {
     .join("")}</div>
     ${s.mode === "plane" ? `<label class="field-label">Riktning<select id="clip-axis"><option value="x" ${s.axis === "x" ? "selected" : ""}>X – sida</option><option value="y" ${s.axis === "y" ? "selected" : ""}>Y – höjd</option><option value="z" ${s.axis === "z" ? "selected" : ""}>Z – djup</option></select></label><label class="field-label">Snittläge <output>${s.position}%</output><input id="clip-position" type="range" min="0" max="100" value="${s.position}"/></label><label class="checkbox-label"><input id="clip-invert" type="checkbox" ${s.invert ? "checked" : ""}/> Vänd snittriktning</label>` : ""}
     ${s.mode === "box" ? ["X", "Y · höjd", "Z"].map((axis, i) => `<div class="box-range"><strong>${axis}</strong>${["Min", "Max"].map((label, j) => `<label>${label}<input type="range" data-box-index="${i * 2 + j}" min="0" max="100" value="${s.box[i * 2 + j]}" aria-label="${axis} ${label}"/><output>${s.box[i * 2 + j]}%</output></label>`).join("")}</div>`).join("") : ""}
-    <p class="muted">Snitt påverkar bara visningen. Modellens geometri ändras inte.</p><h2 class="section-heading">Mät avstånd</h2><button class="wide-button ${viewer.tool === "measure" ? "active" : ""}" data-action="measure">${icon("ruler")} ${viewer.tool === "measure" ? "Avsluta mätning" : "Starta mätning"}</button><p class="muted">Välj två punkter på modellen. Snap till triangelhörn inom 12 skärmpixlar.</p>${viewer.measurements.map((m, i) => `<div class="measurement-result"><span>Mått ${i + 1}</span><strong>${format(m.distance)} m</strong><small>ΔX ${format(m.end.x - m.start.x)} · ΔY ${format(m.end.y - m.start.y)} · ΔZ ${format(m.end.z - m.start.z)}</small></div>`).join("")}${viewer.measurements.length ? '<button class="text-button" data-action="clear-measures">Rensa alla mått</button>' : ""}`;
+    <p class="muted">Snitt påverkar bara visningen. Modellens geometri ändras inte.</p><h2 class="section-heading">Mät avstånd</h2>${measurementSettings()}<button class="wide-button ${viewer.tool === "measure" ? "active" : ""}" data-action="measure">${icon("ruler")} ${viewer.tool === "measure" ? "Avsluta mätning" : "Starta mätning"}</button><p class="muted">Välj punkt, rak kant eller sammanhängande plan yta i valfri kombination. Måttet är kortaste avståndet mellan de begränsade delarna. Måtten är temporära. Högerklicka på bakgrunden → Rensa mått.</p>${viewer.measurements.map((m, i) => `<div class="measurement-result"><span>Mått ${m.id} · ${m.types.map((kind) => geometryNames[kind]).join(" → ")}</span><strong>${viewer.measureTool.format(m.distance)}</strong><small>ΔX ${viewer.measureTool.format(m.end.x - m.start.x)} · ΔY ${viewer.measureTool.format(m.end.y - m.start.y)} · ΔZ ${viewer.measureTool.format(m.end.z - m.start.z)}</small><button class="text-button" data-action="remove-measure" data-measure="${m.id}">Ta bort mått</button></div>`).join("")}${viewer.measurements.length ? '<button class="text-button" data-action="clear-measures">Rensa alla mått</button>' : ""}`;
 }
 
 function toolState() {
@@ -585,10 +780,38 @@ function toolState() {
       .querySelectorAll(`[data-action="${action}"]`)
       .forEach((b) => b.setAttribute("aria-pressed", active));
   const hud = $("#tool-hud");
+  if (viewer.tool === "move" && viewer.pointMove) {
+    const move = viewer.pointMove;
+    const message = move.start
+      ? "Välj slutpunkt – dit startpunkten ska flyttas"
+      : `Välj startpunkt på ${move.model.name}`;
+    hud.hidden = false;
+    hud.innerHTML = `${icon("cursor")}<span>${esc(message)}</span><label>Riktning<select data-move-axis aria-label="Lås flyttriktning">${[
+      ["free", "Fri XYZ"],
+      ["x", "X"],
+      ["y", "Y · höjd"],
+      ["z", "Z"],
+      ["xz", "Horisontellt"],
+    ]
+      .map(
+        ([key, name]) =>
+          `<option value="${key}" ${move.axis === key ? "selected" : ""}>${name}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label>${move.start ? `<label>Exakt avstånd (m)<input data-move-distance aria-label="Exakt flyttavstånd i meter" type="number" step="any" value="${move.distance ?? ""}" placeholder="Valfritt"/></label>` : ""}${small("exit-tool", "Avbryt flytt", "close")}`;
+    return;
+  }
+  const undo = state.placementHistory.at(-1);
+  if (viewer.tool === "select" && state.showMoveUndo && undo) {
+    hud.hidden = false;
+    hud.innerHTML = `<span>${esc(undo.model.name)}</span><button class="compact" data-action="undo-placement" title="Ctrl+Z / Cmd+Z" ${state.undoBusy ? "disabled" : ""}>Ångra flytt</button>${small("dismiss-move-undo", "Stäng", "close")}`;
+    return;
+  }
   hud.hidden = viewer.tool !== "measure" && viewer.section.mode === "none";
   hud.innerHTML =
     viewer.tool === "measure"
-      ? `${icon("ruler")}<span>Välj två punkter på modellen</span>${small("clear-measures", "Rensa mått", "trash")}${small("exit-tool", "Avsluta mätning", "close")}`
+      ? `${icon("ruler")}${measurementModes()}<span>Välj ${geometryNames[viewer.measureTool.modes[viewer.measureTool.first ? 1 : 0]].toLowerCase()} ${viewer.measureTool.first ? "2" : "1"}</span>${small("clear-measures", "Rensa mått", "trash")}${small("exit-tool", "Avsluta mätning", "close")}`
       : `${icon("cut")}<span>${viewer.section.mode === "plane" ? "Snittplan aktivt" : "Snittbox aktiv"}</span><button class="compact" data-tab="review">Justera</button>${small("clip-none", "Stäng snitt", "close")}`;
 }
 function setClip(mode) {
@@ -601,6 +824,9 @@ async function removeModel(model, save = true) {
   model.worker?.terminate();
   viewer.removeModel(model);
   state.models = state.models.filter((m) => m !== model);
+  state.placementHistory = state.placementHistory.filter(
+    (entry) => entry.model !== model,
+  );
   for (const [key, branch] of state.selectedBranches)
     if (branch.model === model) state.selectedBranches.delete(key);
   for (const o of model.objects) {
@@ -625,19 +851,61 @@ async function removeModel(model, save = true) {
 }
 async function showDemo() {
   if (state.loading) return;
-  for (const model of [...state.models]) await removeModel(model);
-  state.origin = null;
-  state.hidden.clear();
-  state.isolated = null;
-  state.selected.clear();
-  createDemoModels().forEach(registerModel);
-  const beam = allObjects().find((o) => o.name === "Balk K-204");
-  if (beam) state.selected.add(beam.key);
-  viewer.standardView("iso");
-  setTab("models");
-  refresh();
-  persist();
-  status("Demomodell · Öppna IFC för att granska dina egna modeller");
+  state.loading = true;
+  try {
+    for (const model of [...state.models]) await removeModel(model);
+    state.origin = [0, 0, 0];
+    state.hidden.clear();
+    state.isolated = null;
+    state.selected.clear();
+    createDemoModels().forEach(registerModel);
+    const beam = allObjects().find((o) => o.name === "Balk K-204");
+    if (beam) state.selected.add(beam.key);
+    setTab("models");
+    refresh();
+    $("#loading").hidden = false;
+    $("#loading-name").textContent = "DWG_Solider.dwg";
+    $("#loading-status").textContent = "Läser demomodellens DWG-solider…";
+    try {
+      const response = await fetch(
+        `${import.meta.env.BASE_URL}demo/DWG_Solider.dwg`,
+      );
+      if (!response.ok) throw Error("DWG-testfilen kunde inte hämtas.");
+      await importCadRecord(
+        {
+          id: "demo-dwg-solids",
+          name: "DWG_Solider.dwg",
+          demo: true,
+          buffer: await response.arrayBuffer(),
+          placement: {
+            unitFactor: 1,
+            x: -10,
+            z: -12,
+            elevation: 0,
+            rotation: 0,
+          },
+        },
+        false,
+      );
+    } catch (error) {
+      notify(`DWG-demot kunde inte öppnas: ${error.message}`);
+    }
+    state.models.sort(
+      (a, b) =>
+        Number(b.id === "demo-dwg-solids") - Number(a.id === "demo-dwg-solids"),
+    );
+    viewer.standardView("iso");
+    refresh();
+    persist();
+    status(
+      state.models.some((m) => m.id === "demo-dwg-solids")
+        ? "Demomodell · DWG_Solider.dwg: låda, cylinder, sfär och ring framför byggnaden"
+        : "Demomodell · DWG-testfilen kunde inte öppnas",
+    );
+  } finally {
+    state.loading = false;
+    $("#loading").hidden = true;
+  }
 }
 async function importRecord(record, persistFile = true) {
   $("#loading").hidden = false;
@@ -651,6 +919,8 @@ async function importRecord(record, persistFile = true) {
     } catch {
       notify("Modellen öppnas, men kunde inte sparas lokalt.");
     }
+  if (/\.(dxf|dwg)$/i.test(record.name))
+    return importCadRecord(record, persistFile);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./ifc.worker.js", import.meta.url), {
       type: "module",
@@ -660,6 +930,7 @@ async function importRecord(record, persistFile = true) {
       name: record.name,
       visible: true,
       parts: [],
+      placement: record.placement || { x: 0, z: 0, elevation: 0, rotation: 0 },
       worker,
       color: ["#769faf", "#b79c77", "#9aa88d"][state.models.length % 3],
     };
@@ -720,18 +991,91 @@ async function importRecord(record, persistFile = true) {
     );
   });
 }
+async function importCadRecord(record, persistFile) {
+  const format = record.name.split(".").at(-1).toUpperCase();
+  $("#loading-status").textContent = `Läser ${format}-ritning…`;
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./cad.worker.js", import.meta.url), {
+      type: "module",
+    });
+    const fail = async (message) => {
+      worker.terminate();
+      if (persistFile)
+        try {
+          await deleteFile(record.id);
+        } catch {}
+      reject(new Error(message));
+    };
+    worker.onerror = (error) =>
+      fail(error.message || `${format}-importen avbröts.`);
+    worker.onmessage = async ({ data }) => {
+      if (data.type === "progress")
+        $("#loading-status").textContent = data.label;
+      if (data.type === "error") {
+        fail(data.message);
+        return;
+      }
+      if (data.type !== "done") return;
+      try {
+        const origin = state.origin || initialCadOrigin(data);
+        const placement = record.placement || {
+          unitFactor: data.unitFactor,
+          x: 0,
+          z: 0,
+          elevation: 0,
+          rotation: 0,
+        };
+        const model = buildCadModel({
+          id: record.id,
+          name: record.name,
+          demo: !!record.demo,
+          format,
+          schema: `${format} · CAD`,
+          visible: true,
+          color: "#6e9a8c",
+          origin,
+          placement,
+          cadData: data,
+        });
+        state.origin ||= origin;
+        registerModel(model);
+        worker.terminate();
+        refresh();
+        viewer.fit();
+        persist();
+        if (persistFile)
+          try {
+            await storePlacement(record.id, placement);
+          } catch {
+            notify("Placeringen kunde inte sparas lokalt.");
+          }
+        status(
+          `${record.name} · ${model.objects.length.toLocaleString("sv")} ritningsobjekt${data.skipped.length ? ` · ${data.skipped.length} anmärkningar` : ""}`,
+        );
+        resolve();
+      } catch (error) {
+        fail(error.message);
+      }
+    };
+    worker.postMessage({ format, buffer: record.buffer }, [record.buffer]);
+  });
+}
 async function importFiles(files) {
   if (state.loading) {
     notify("Vänta tills den pågående importen är klar.");
     return;
   }
-  const valid = [...files].filter((f) => /\.ifc$/i.test(f.name));
+  const valid = [...files].filter((f) => /\.(ifc|dxf|dwg)$/i.test(f.name));
   if (!valid.length) {
-    notify("Välj en fil med ändelsen .ifc.");
+    notify("Välj IFC, DXF eller DWG.");
     return;
   }
   state.loading = true;
   for (const file of valid) {
+    if (/\.(dxf|dwg)$/i.test(file.name) && file.size > 50 * 1024 * 1024) {
+      notify(`${file.name}: CAD-filer får vara högst 50 MB.`);
+      continue;
+    }
     try {
       await importRecord({
         id: crypto.randomUUID(),
@@ -842,6 +1186,88 @@ const actions = {
         )
         ?.focus();
   },
+  "undo-placement": (button) => undoPlacement(button?.dataset.model),
+  "dismiss-move-undo": () => {
+    state.showMoveUndo = false;
+    toolState();
+  },
+  "pick-placement": (button) => {
+    const model = state.models.find((m) => m.id === button.dataset.model);
+    if (!model) return;
+    if (
+      !model.visible ||
+      model.objects.every(
+        (o) =>
+          state.hidden.has(o.key) ||
+          (state.isolated && !state.isolated.has(o.key)),
+      )
+    ) {
+      notify("Visa modellen innan du väljer startpunkt.");
+      return;
+    }
+    $("#cad-placement-dialog").close();
+    closeObjectMenu();
+    viewer.beginPointMove(
+      model,
+      async (delta) => {
+        toolState();
+        try {
+          const changed = await applyCadPlacement(model, {
+            x: model.placement.x + delta.x,
+            z: model.placement.z + delta.z,
+            elevation: model.placement.elevation + delta.y,
+          });
+          if (!changed) return;
+          state.showMoveUndo = true;
+          toolState();
+          status(
+            `${model.name} flyttad · ΔX ${format(delta.x)} · ΔY ${format(delta.y)} · ΔZ ${format(delta.z)} m`,
+          );
+        } catch (error) {
+          notify(error.message);
+        }
+      },
+      () => {
+        toolState();
+        status(
+          viewer.pointMove.start
+            ? "Välj slutpunkt på ett objekt eller arbetsplanet. Esc avbryter."
+            : `Välj startpunkt på ${model.name}. Esc avbryter.`,
+        );
+      },
+    );
+    viewer.renderer.domElement.focus({ preventScroll: true });
+  },
+  "cad-placement": (button) =>
+    openCadPlacement(
+      state.models.find((model) => model.id === button.dataset.model),
+    ),
+  "center-cad": (button) => {
+    const model = state.models.find(
+      (model) => model.id === button.dataset.model,
+    );
+    const target = new THREE.Box3(),
+      source = new THREE.Box3();
+    state.models
+      .filter((other) => other !== model)
+      .forEach((other) =>
+        other.objects.forEach((object) => target.union(object.bounds)),
+      );
+    model.objects.forEach((object) => source.union(object.bounds));
+    if (target.isEmpty())
+      target.setFromCenterAndSize(
+        new THREE.Vector3(),
+        new THREE.Vector3(1, 0, 1),
+      );
+    const delta = target
+      .getCenter(new THREE.Vector3())
+      .sub(source.getCenter(new THREE.Vector3()));
+    applyCadPlacement(model, {
+      x: model.placement.x + delta.x,
+      z: model.placement.z + delta.z,
+      elevation: model.placement.elevation + target.min.y - source.min.y,
+    });
+  },
   "remove-model": (b) =>
     removeModel(state.models.find((m) => m.id === b.dataset.model)),
   "select-object": (b, e) =>
@@ -877,20 +1303,26 @@ const actions = {
     viewer.setTool(viewer.tool === "measure" ? "select" : "measure");
     if (viewer.tool === "measure") {
       setTab("review");
-      status("Välj första punkten på modellen");
+      status(
+        `Välj första geometrin: ${geometryNames[viewer.measureTool.modes[0]].toLowerCase()}.`,
+      );
     }
     toolState();
     renderPanel();
   },
   "exit-tool": () => {
+    const moving = viewer.tool === "move";
     viewer.setTool("select");
     toolState();
     renderPanel();
-    status("Mätning avslutad");
+    status(moving ? "Flytt avbruten" : "Mätning avslutad");
   },
+  "remove-measure": (button) =>
+    viewer.measureTool.remove(Number(button.dataset.measure)),
   "clear-measures": () => {
     viewer.clearMeasurements();
     renderPanel();
+    toolState();
     status("Måtten rensade");
   },
   section: () => setClip(viewer.section.mode === "plane" ? "none" : "plane"),
@@ -963,7 +1395,7 @@ const actions = {
   "close-dialog": () =>
     document.querySelectorAll("dialog[open]").forEach((d) => d.close()),
   "toggle-panel": () => {
-    $(".workbench").classList.toggle("panel-collapsed");
+    setPanelCollapsed(!$(".workbench").classList.contains("panel-collapsed"));
   },
   fullscreen: () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -1069,6 +1501,53 @@ document.addEventListener("input", (e) => {
   }
 });
 document.addEventListener("change", (e) => {
+  if (e.target.dataset.measureMode !== undefined) {
+    viewer.measureTool.setModes(
+      Number(e.target.dataset.measureMode),
+      e.target.value,
+    );
+    toolState();
+    renderPanel();
+    return;
+  }
+  if (
+    e.target.hasAttribute("data-measure-unit") ||
+    e.target.hasAttribute("data-measure-decimals")
+  ) {
+    if (e.target.hasAttribute("data-measure-unit"))
+      viewer.measureTool.unit = e.target.value;
+    else viewer.measureTool.decimals = Number(e.target.value);
+    viewer.measureTool.updateLabels();
+    renderPanel();
+    return;
+  }
+  if (e.target.dataset.snapSetting) {
+    viewer.snap.settings[e.target.dataset.snapSetting] = e.target.checked;
+    viewer.snap.reset();
+    viewer.hideSnap();
+    return;
+  }
+  if (e.target.hasAttribute("data-move-axis") && viewer.pointMove) {
+    viewer.pointMove.axis = e.target.value;
+    viewer.snap.reset();
+    return;
+  }
+  if (e.target.hasAttribute("data-move-distance") && viewer.pointMove) {
+    const n = e.target.value.trim() === "" ? null : Number(e.target.value);
+    if (n === null || Number.isFinite(n)) viewer.pointMove.distance = n;
+    return;
+  }
+
+  if (e.target.dataset.cadModel) {
+    const model = state.models.find(
+      (model) => model.id === e.target.dataset.cadModel,
+    );
+    if (model)
+      applyCadPlacement(model, {
+        [e.target.dataset.placement]: Number(e.target.value),
+      }).catch((error) => notify(error.message));
+    return;
+  }
   if (e.target.id === "navigation-zoom-inverted")
     setZoomInverted(e.target.checked);
   if (e.target.id === "navigation-orbit-damping") {
@@ -1108,7 +1587,7 @@ document.addEventListener("change", (e) => {
     state.isolated = e.target.value
       ? new Set(
           allObjects()
-            .filter((o) => o.level === e.target.value)
+            .filter((o) => modelFor(o).cadData || o.level === e.target.value)
             .map((o) => o.key),
         )
       : null;
@@ -1144,11 +1623,51 @@ $("#view-form").addEventListener("submit", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    const moving = viewer.tool === "move";
     closeObjectMenu();
     viewer.setTool("select");
     toolState();
     renderPanel();
-
+    if (moving) status("Flytt avbruten.");
+    return;
+  }
+  if (
+    !e.target.closest("input,select,textarea,dialog") &&
+    (viewer.tool === "measure" || viewer.tool === "move") &&
+    e.key === "Tab"
+  ) {
+    e.preventDefault();
+    viewer.cycleSnap();
+    return;
+  }
+  if (
+    !e.target.closest("input,select,textarea,dialog") &&
+    viewer.tool === "move" &&
+    ["x", "y", "z"].includes(e.key.toLowerCase())
+  ) {
+    e.preventDefault();
+    const key = e.key.toLowerCase();
+    viewer.pointMove.axis = viewer.pointMove.axis === key ? "free" : key;
+    toolState();
+    return;
+  }
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    !e.shiftKey &&
+    e.key.toLowerCase() === "z" &&
+    !e.target.closest("input,select,textarea") &&
+    !document.querySelector("dialog[open]:not(#cad-placement-dialog)")
+  ) {
+    const dialog = $("#cad-placement-dialog");
+    const modelId = dialog.open ? dialog.dataset.model : undefined;
+    if (
+      state.placementHistory.some(
+        (entry) => !modelId || entry.model.id === modelId,
+      )
+    ) {
+      e.preventDefault();
+      undoPlacement(modelId);
+    }
     return;
   }
   if (
@@ -1212,7 +1731,7 @@ async function start() {
   refresh();
   status(
     state.models.some((m) => m.demo)
-      ? "Demomodell · Öppna IFC för dina egna modeller"
+      ? "Demomodell · Öppna modell för dina egna modeller"
       : "Mitten/högerdra: panorera · Shift + dra: orbit · Scrolla: zoom",
   );
 }

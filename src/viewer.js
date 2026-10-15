@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import { SnapResolver, snapNames } from "./snap-resolver.js";
+import { MeasurementTool } from "./measurement-tool.js";
+import { constrainMove } from "./measurement-geometry.js";
+import { placeIfcModel } from "./model-placement.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { selectInRectangle } from "./rectangle-selection.js";
 import { installRectangleSelection } from "./rectangle-input.js";
@@ -40,6 +44,9 @@ export class Viewer {
     };
     this.measurements = [];
     this.measureStart = null;
+    this.snapRevision = 0;
+    this.snap = new SnapResolver(this);
+    this.measureTool = new MeasurementTool(this);
     this.frame = null;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#e9eef0");
@@ -115,6 +122,10 @@ export class Viewer {
     this.snapMarker.renderOrder = 10;
     this.snapMarker.visible = false;
     this.scene.add(this.snapMarker);
+    this.snapBadge = document.createElement("div");
+    this.snapBadge.className = "snap-badge";
+    this.snapBadge.hidden = true;
+    this.host.append(this.snapBadge);
     let down;
     const canvas = this.renderer.domElement;
     canvas.tabIndex = 0;
@@ -146,11 +157,16 @@ export class Viewer {
         start.button === 2 &&
         !start.modified &&
         !(e.shiftKey || e.metaKey || e.ctrlKey || e.altKey)
-      )
-        this.callbacks.onContextMenu?.(hit?.object, e);
-      else if (start.button === 0) {
-        if (this.tool === "measure") {
-          if (hit) this.addMeasurePoint(this.snapPoint(hit));
+      ) {
+        if (this.tool === "move") {
+          this.setTool("select");
+          this.callbacks.onPointMoveCancel?.();
+        } else this.callbacks.onContextMenu?.(hit?.object, e);
+      } else if (start.button === 0) {
+        if (this.tool === "move") {
+          this.addMovePoint(e, hit);
+        } else if (this.tool === "measure") {
+          this.measureTool.click(e, hit);
         } else
           this.callbacks.onSelect(
             hit?.object,
@@ -160,29 +176,34 @@ export class Viewer {
     });
     canvas.addEventListener("dblclick", (e) => {
       const hit = this.pick(e);
-      if (hit && this.tool !== "measure") this.fit(hit.object.bounds);
+      if (hit && this.tool === "select") this.fit(hit.object.bounds);
     });
     canvas.addEventListener("pointermove", (e) => {
       if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
         down.moved = true;
-      if (e.buttons) return;
-      const hit = this.tool === "measure" ? this.pick(e) : null;
-      if (this.tool === "measure" && hit) {
-        const point = this.snapPoint(hit);
-        this.snapMarker.position.copy(point);
-        this.snapMarker.visible = true;
-        const scale = this.camera.isPerspectiveCamera
-          ? this.camera.position.distanceTo(point) * 0.0035
-          : this.orthoSpan * 0.003;
-        this.snapMarker.scale.setScalar(Math.max(0.08, scale / 0.045));
-        this.invalidate();
-      } else if (this.snapMarker.visible) {
-        this.snapMarker.visible = false;
-        this.invalidate();
+      if (e.buttons) {
+        this.hideSnap();
+        this.measureTool.clearPreview();
+        this.measureTool.dispose(this.measureTool.hoverOverlay);
+        this.measureTool.hoverOverlay = null;
+        this.measureTool.hoverId = null;
+        return;
       }
+      if (this.tool === "move") {
+        this.previewMove(e);
+        return;
+      }
+      if (this.tool === "measure") {
+        this.lastToolEvent = { clientX: e.clientX, clientY: e.clientY };
+        this.measureTool.hover(e, this.pick(e));
+      } else this.hideSnap();
     });
     canvas.addEventListener("pointerleave", () => {
-      this.snapMarker.visible = false;
+      this.hideSnap();
+      this.measureTool.dispose(this.measureTool.hoverOverlay);
+      this.measureTool.hoverOverlay = null;
+      this.measureTool.hoverId = null;
+      this.measureTool.clearPreview();
       this.invalidate();
     });
     let rectangleControlsEnabled;
@@ -278,12 +299,12 @@ export class Viewer {
         this.renderer.autoClear = true;
         this.renderer.setScissorTest(false);
       }
-      this.measurements.forEach((m) => {
-        const p = m.midpoint.clone().project(this.camera);
-        m.label.style.left = `${(p.x * 0.5 + 0.5) * this.width}px`;
-        m.label.style.top = `${(-p.y * 0.5 + 0.5) * this.height}px`;
-        m.label.hidden = p.z > 1 || p.z < -1;
-      });
+      if (this.snapMarker.visible && !this.snapBadge.hidden) {
+        const point = this.snapMarker.position.clone().project(this.camera);
+        this.snapBadge.style.left = `${(point.x * 0.5 + 0.5) * this.width + 14}px`;
+        this.snapBadge.style.top = `${(-point.y * 0.5 + 0.5) * this.height + 10}px`;
+      }
+      this.measureTool.layoutLabels();
     });
   }
   resize() {
@@ -306,6 +327,7 @@ export class Viewer {
     this.orthographic.updateProjectionMatrix();
   }
   addModel(model) {
+    this.snapRevision++;
     model.batches = buildBatches(model);
     this.models.push(model);
     this.batches.push(...model.batches);
@@ -313,11 +335,31 @@ export class Viewer {
       this.scene.add(batch.mesh);
       updateBatchVisibility(batch, this.hidden, this.isolated);
     });
+    if (
+      !model.cadData &&
+      model.placement &&
+      Object.values(model.placement).some((v) => v !== 0)
+    )
+      placeIfcModel(model, model.placement);
     this.updateBounds();
     this.setSection(this.section);
     this.recolor();
   }
+  setModelPlacement(model, placement) {
+    this.snapRevision++;
+    placeIfcModel(model, placement);
+    this.clearMeasurements();
+    this.updateBounds();
+    this.setSection(this.section);
+    this.setEdges(this.edgesEnabled);
+    this.invalidate();
+  }
   removeModel(model) {
+    this.snapRevision++;
+    if (this.pointMove?.model === model) {
+      this.setTool("select");
+      this.callbacks.onPointMoveCancel?.();
+    }
     model.batches.forEach((batch) => {
       this.scene.remove(batch.mesh);
       if (batch.edges) this.scene.remove(batch.edges);
@@ -349,6 +391,7 @@ export class Viewer {
     this.grid.position.z = center.z;
   }
   updateVisibility(hidden, isolated) {
+    this.snapRevision++;
     this.hidden = hidden;
     this.isolated = isolated;
     this.batches.forEach((b) => updateBatchVisibility(b, hidden, isolated));
@@ -540,6 +583,11 @@ export class Viewer {
     this.invalidate();
   }
   setSection(section) {
+    this.snapRevision++;
+    const hadPendingMeasure = !!this.measureTool.first;
+    this.measureTool.cancelPending();
+    if (hadPendingMeasure) this.callbacks.onMeasureChange?.();
+    this.hideSnap();
     this.section = structuredClone(section);
     this.clippingPlanes = [];
     if (!this.bounds) return;
@@ -588,7 +636,12 @@ export class Viewer {
         batch.edges.material.dispose();
         batch.edges = null;
       }
-      if (enabled && batch.mesh.visible) {
+      if (
+        enabled &&
+        batch.mesh.visible &&
+        !batch.mesh.material.map &&
+        batch.primitiveSize !== 2
+      ) {
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(batch.mesh.geometry, 35),
           new THREE.LineBasicMaterial({
@@ -611,8 +664,21 @@ export class Viewer {
       (-(event.clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
+    const viewHeight = this.camera.isOrthographicCamera
+      ? (this.camera.top - this.camera.bottom) / this.camera.zoom
+      : 2 *
+        this.camera.position.distanceTo(this.controls.target) *
+        Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    this.raycaster.params.Line.threshold = (viewHeight / this.height) * 4;
     const hits = this.raycaster.intersectObjects(
-      this.batches.filter((b) => b.mesh.visible).map((b) => b.mesh),
+      this.batches
+        .filter(
+          (b) =>
+            b.mesh.visible &&
+            (!(this.tool === "measure" || this.tool === "move") ||
+              !b.mesh.material.map),
+        )
+        .map((b) => b.mesh),
       false,
     );
     const hit = hits.find(
@@ -622,95 +688,190 @@ export class Viewer {
     const cap = this.sectionCaps.pick(this.raycaster, hit?.distance);
     if (cap) return cap;
     if (!hit) return null;
-    hit.object = pickedObject(hit.object.userData.batch, hit.faceIndex);
+    hit.sourceBatch = hit.object.userData.batch;
+    hit.sourceFace = hit.face;
+    hit.object = pickedObject(
+      hit.object.userData.batch,
+      hit.faceIndex ?? hit.index / 2,
+    );
     return hit.object ? hit : null;
   }
   snapPoint(hit) {
-    if (hit.sectionCap) return hit.point.clone();
-    // Snap to a vertex on the hit triangle only if it lies within 12 screen pixels.
-    const batch = this.batches.find((b) =>
-      b.ranges.some((r) => r.object === hit.object),
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const event = {
+      clientX: rect.left + ((this.pointer.x + 1) * this.width) / 2,
+      clientY: rect.top + ((1 - this.pointer.y) * this.height) / 2,
+    };
+    return (
+      this.snap
+        .resolve(event, hit, this.pointMove?.start || this.measureTool.anchor)
+        ?.point.clone() || hit.point.clone()
     );
-    // Multi-part objects can span batches; find the actual raycast triangle again.
-    const hits = this.raycaster.intersectObjects(
-      this.batches.filter((b) => b.mesh.visible).map((b) => b.mesh),
-      false,
+  }
+  showSnap(snap) {
+    this.snapMarker.visible = !!snap;
+    this.snapBadge.hidden = !snap;
+    if (snap) {
+      this.snapMarker.position.copy(snap.point);
+      const scale = this.camera.isPerspectiveCamera
+        ? this.camera.position.distanceTo(snap.point) * 0.0035
+        : this.orthoSpan * 0.003;
+      this.snapMarker.scale.setScalar(Math.max(0.08, scale / 0.045));
+      const symbols = {
+        endpoint: "□",
+        midpoint: "△",
+        center: "⊕",
+        perpendicular: "∟",
+        edge: "×",
+        surface: "○",
+        ground: "○",
+      };
+      this.snapBadge.dataset.kind = snap.snap;
+      this.snapBadge.textContent = `${symbols[snap.snap] || "○"} ${snapNames[snap.snap] || "Punkt"} · Tab`;
+    }
+    this.invalidate();
+  }
+  hideSnap() {
+    this.snapMarker.visible = false;
+    if (this.snapBadge) this.snapBadge.hidden = true;
+  }
+  cycleSnap() {
+    this.snap.cycle(
+      this.tool === "measure"
+        ? this.measureTool.modes[this.measureTool.first ? 1 : 0]
+        : "point",
     );
-    const actual = hits.find(
-      (h) =>
-        h.point.distanceTo(hit.point) < 1e-5 &&
-        pickedObject(h.object.userData.batch, h.faceIndex) === hit.object,
+    if (this.tool === "measure" && this.lastToolEvent)
+      this.measureTool.hover(this.lastToolEvent, this.pick(this.lastToolEvent));
+    else if (this.tool === "move" && this.lastToolEvent)
+      this.previewMove(this.lastToolEvent);
+  }
+  beginPointMove(model, onComplete, onStage) {
+    this.setTool("move");
+    this.pointMove = {
+      model,
+      onComplete,
+      onStage,
+      start: null,
+      axis: "free",
+      distance: null,
+    };
+    onStage();
+  }
+  movePoint(event, hit = this.pick(event)) {
+    this.lastToolEvent = { clientX: event.clientX, clientY: event.clientY };
+    const move = this.pointMove;
+    const snap = this.snap.resolve(
+      event,
+      hit,
+      move.start,
+      move.start ? null : move.model.id,
     );
-    if (!actual || !batch) return hit.point.clone();
-    const geometry = actual.object.geometry;
-    const point = new THREE.Vector3();
-    let nearest = hit.point.clone(),
-      distance = 12;
-    for (const index of [actual.face.a, actual.face.b, actual.face.c]) {
-      point.fromBufferAttribute(geometry.attributes.position, index);
-      const screen = point.clone().project(this.camera);
-      const pixels = Math.hypot(
-        ((screen.x - this.pointer.x) * this.width) / 2,
-        ((screen.y - this.pointer.y) * this.height) / 2,
+    let point = snap?.point.clone();
+    if (!point && move.start && !hit)
+      point = this.raycaster.ray.intersectPlane(
+        new THREE.Plane(new THREE.Vector3(0, 1, 0), -move.start.y),
+        new THREE.Vector3(),
       );
-      if (pixels < distance) {
-        nearest.copy(point);
-        distance = pixels;
+    if (!point) return null;
+    const constrained = move.start
+      ? constrainMove(move.start, point, move.axis, move.distance)
+      : point;
+    this.showSnap({
+      ...snap,
+      point: constrained,
+      snap: snap?.snap || "ground",
+    });
+    return constrained;
+  }
+  addMovePoint(event, hit) {
+    const move = this.pointMove;
+    if (!move) return;
+    const point = this.movePoint(event, hit);
+    if (!point) {
+      this.callbacks.onError(
+        move.start
+          ? "Välj en slutpunkt på modellen eller arbetsplanet."
+          : `Välj startpunkten på ${move.model.name}.`,
+      );
+      return;
+    }
+    if (!move.start) {
+      move.start = point.clone();
+      const marker = new THREE.Mesh(
+        this.snapMarker.geometry.clone(),
+        this.snapMarker.material.clone(),
+      );
+      marker.position.copy(point);
+      marker.scale.copy(this.snapMarker.scale);
+      marker.renderOrder = 12;
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([point, point]),
+        new THREE.LineBasicMaterial({ color: 0x287c65, depthTest: false }),
+      );
+      line.renderOrder = 11;
+      this.scene.add(marker, line);
+      move.marker = marker;
+      move.line = line;
+      move.onStage();
+      this.invalidate();
+      return;
+    }
+    const delta = point.clone().sub(move.start);
+    const complete = move.onComplete;
+    this.setTool("select");
+    complete(delta);
+  }
+  previewMove(event) {
+    const point = this.movePoint(event);
+    this.snapMarker.visible = !!point;
+    if (!point) this.hideSnap();
+    if (point) {
+      this.snapMarker.position.copy(point);
+      const scale = this.camera.isPerspectiveCamera
+        ? this.camera.position.distanceTo(point) * 0.0035
+        : this.orthoSpan * 0.003;
+      this.snapMarker.scale.setScalar(Math.max(0.08, scale / 0.045));
+      if (this.pointMove.line) {
+        this.pointMove.line.geometry.attributes.position.setXYZ(
+          1,
+          point.x,
+          point.y,
+          point.z,
+        );
+        this.pointMove.line.geometry.attributes.position.needsUpdate = true;
+        this.pointMove.line.geometry.computeBoundingSphere();
       }
     }
-    return nearest;
+    if (this.pointMove.line) this.pointMove.line.visible = !!point;
+    this.invalidate();
   }
   setTool(tool) {
+    if (this.pointMove) {
+      for (const object of [this.pointMove.marker, this.pointMove.line])
+        if (object) {
+          this.scene.remove(object);
+          object.geometry.dispose();
+          object.material.dispose();
+        }
+      this.pointMove = null;
+    }
     this.viewTransition.cancel();
     this.rectangleSelection.cancel();
     this.tool = tool;
     this.measureStart = null;
-    this.snapMarker.visible = false;
+    this.measureTool.cancelPending();
+    this.snap.reset();
+    this.hideSnap();
     this.renderer.domElement.style.cursor =
-      tool === "measure" ? "crosshair" : "default";
+      tool === "measure" || tool === "move" ? "crosshair" : "default";
     this.invalidate();
   }
   addMeasurePoint(point) {
-    if (!this.measureStart) {
-      this.measureStart = point;
-      this.callbacks.onMeasureStart();
-      return;
-    }
-    const start = this.measureStart;
-    this.measureStart = null;
-    const distance = start.distanceTo(point);
-    if (distance < 1e-6) return;
-    const line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([start, point]),
-      new THREE.LineBasicMaterial({ color: "#287c65", depthTest: false }),
-    );
-    line.renderOrder = 11;
-    this.scene.add(line);
-    const label = document.createElement("div");
-    label.className = "measure-label";
-    label.textContent = `${distance.toLocaleString("sv", { maximumFractionDigits: 3 })} m`;
-    this.host.append(label);
-    this.measurements.push({
-      start,
-      end: point,
-      midpoint: start.clone().lerp(point, 0.5),
-      distance,
-      line,
-      label,
-    });
-    this.callbacks.onMeasure(distance, point.clone().sub(start));
-    this.invalidate();
+    this.measureTool.accept({ kind: "point", point });
   }
   clearMeasurements() {
-    this.measureStart = null;
-    this.measurements.forEach((m) => {
-      this.scene.remove(m.line);
-      m.line.geometry.dispose();
-      m.line.material.dispose();
-      m.label.remove();
-    });
-    this.measurements = [];
-    this.invalidate();
+    this.measureTool.clear();
   }
   cameraSnapshot() {
     return {
