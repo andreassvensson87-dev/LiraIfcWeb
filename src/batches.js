@@ -1,5 +1,43 @@
 import * as THREE from "three";
+import { MeshBVH, CENTER, acceleratedRaycast } from "three-mesh-bvh";
 import { isObjectVisible } from "./model-state.js";
+
+// Keep large opaque IFC chunks spatially local. The stencil renderer can then
+// skip whole chunks that do not cross a cut instead of redrawing the building.
+function spatialParts(parts) {
+  if (parts.length < 256) return parts;
+  const lower = [Infinity, Infinity, Infinity],
+    upper = [-Infinity, -Infinity, -Infinity];
+  const centers = parts.map((part) => {
+    const min = [Infinity, Infinity, Infinity],
+      max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < part.positions.length; i += 3)
+      for (let axis = 0; axis < 3; axis++) {
+        min[axis] = Math.min(min[axis], part.positions[i + axis]);
+        max[axis] = Math.max(max[axis], part.positions[i + axis]);
+      }
+    const center = min.map((v, axis) => (v + max[axis]) / 2);
+    center.forEach((v, axis) => {
+      lower[axis] = Math.min(lower[axis], v);
+      upper[axis] = Math.max(upper[axis], v);
+    });
+    return { part, center };
+  });
+  const spread = (v) => {
+    v = (v | (v << 16)) & 0x030000ff;
+    v = (v | (v << 8)) & 0x0300f00f;
+    v = (v | (v << 4)) & 0x030c30c3;
+    return (v | (v << 2)) & 0x09249249;
+  };
+  for (const entry of centers) {
+    const xyz = entry.center.map((v, axis) =>
+      Math.round((1023 * (v - lower[axis])) / (upper[axis] - lower[axis] || 1)),
+    );
+    entry.key = spread(xyz[0]) | (spread(xyz[1]) << 1) | (spread(xyz[2]) << 2);
+  }
+  centers.sort((a, b) => a.key - b.key);
+  return centers.map((entry) => entry.part);
+}
 
 // Batch by opacity. Object ranges keep picking, highlighting and visibility independent
 // without one draw call per IFC object. Chunks bound the temporary merge allocation.
@@ -15,7 +53,9 @@ export function buildBatches(model) {
   for (const [opacity, parts] of groups) {
     let chunk = [],
       vertices = 0;
-    for (const part of parts) {
+    for (const part of model.cadData || Number(opacity.split(":")[0]) < 1
+      ? parts
+      : spatialParts(parts)) {
       chunk.push(part);
       vertices += part.positions.length / 3;
       if (vertices > 250000) {
@@ -72,7 +112,7 @@ function makeBatch(model, parts, opacity) {
     geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.setIndex(new THREE.BufferAttribute(indices.slice(), 1));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.boundingBox = bounds;
   geometry.computeBoundingSphere();
   const material = new THREE.MeshStandardMaterial({
@@ -103,6 +143,7 @@ function makeBatch(model, parts, opacity) {
     ? new THREE.LineSegments(geometry, drawMaterial)
     : new THREE.Mesh(geometry, drawMaterial);
   mesh.frustumCulled = true;
+  if (!parts[0].lines) mesh.raycast = acceleratedRaycast;
   const batch = {
     mesh,
     primitiveSize: parts[0].lines ? 2 : 3,
@@ -121,18 +162,26 @@ export function updateBatchVisibility(batch, hidden, isolated) {
   const shown = ranges.filter((r) =>
     isObjectVisible(r.object, model, hidden, isolated),
   );
+  if (
+    batch.shownRanges?.length === shown.length &&
+    shown.every((range, i) => range === batch.shownRanges[i])
+  )
+    return;
+  batch.shownRanges = shown;
   const count = shown.reduce((n, r) => n + r.indexLength, 0);
-  const indices = new Uint32Array(count),
+  const allShown = shown.length === ranges.length;
+  const indices = allShown ? batch.originalIndices : new Uint32Array(count),
     faceObjects = [];
   let offset = 0;
   for (const range of shown) {
-    indices.set(
-      batch.originalIndices.subarray(
-        range.indexStart,
-        range.indexStart + range.indexLength,
-      ),
-      offset,
-    );
+    if (!allShown)
+      indices.set(
+        batch.originalIndices.subarray(
+          range.indexStart,
+          range.indexStart + range.indexLength,
+        ),
+        offset,
+      );
     faceObjects.push({
       end: (offset + range.indexLength) / (batch.primitiveSize || 3),
       object: range.object,
@@ -140,6 +189,19 @@ export function updateBatchVisibility(batch, hidden, isolated) {
     offset += range.indexLength;
   }
   batch.mesh.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  // Indirection preserves triangle order and therefore IFC identities, original
+  // ranges, face snapping and visibility. Rebuild only when the index changes.
+  const geometry = batch.mesh.geometry;
+  if (batch.bvhIndices !== indices) {
+    geometry.boundsTree = null;
+    if (batch.primitiveSize === 3 && count >= 3000)
+      geometry.boundsTree = new MeshBVH(geometry, {
+        indirect: true,
+        strategy: CENTER,
+        targetLeafSize: 12,
+      });
+    batch.bvhIndices = indices;
+  }
   batch.mesh.visible = count > 0;
   batch.faceObjects = faceObjects;
   if (batch.edges) batch.edges.visible = false;
@@ -190,6 +252,7 @@ export function highlightBatch(batch, selected, colorMode) {
   colors.needsUpdate = true;
 }
 export function disposeBatch(batch) {
+  batch.mesh.geometry.boundsTree = null;
   batch.mesh.geometry.dispose();
   batch.mesh.material.map?.dispose();
   batch.mesh.material.dispose();

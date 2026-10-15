@@ -1,6 +1,20 @@
 import * as THREE from "three";
 import { pickedObject } from "./batches.js";
 
+// Tangent or wholly one-sided closed volumes contribute no cut area. This is
+// deliberately conservative: a straddling batch still renders in full.
+export function crossesSectionPlane(bounds, plane) {
+  if (!bounds || bounds.isEmpty()) return false;
+  let min = plane.constant,
+    max = plane.constant;
+  for (const axis of ["x", "y", "z"]) {
+    const n = plane.normal[axis];
+    min += n * (n >= 0 ? bounds.min[axis] : bounds.max[axis]);
+    max += n * (n >= 0 ? bounds.max[axis] : bounds.min[axis]);
+  }
+  return min < -1e-7 && max > 1e-7;
+}
+
 // Count oriented surfaces in the stencil buffer, then draw only the non-zero
 // cross-section. Each box face has its own counter and is clipped by the other
 // five planes. The geometry is borrowed from the current visible render batches.
@@ -27,6 +41,7 @@ export class SectionCaps {
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.wrapS = this.texture.wrapT = THREE.RepeatWrapping;
     this.texture.anisotropy = 4;
+    this.texture.repeat.setScalar(55);
   }
 
   update(planes, bounds, batches) {
@@ -49,8 +64,6 @@ export class SectionCaps {
       0.01,
     );
     // Relative hatch density remains readable on both small parts and buildings.
-    this.texture.repeat.setScalar(55);
-    this.texture.needsUpdate = true;
     this.passes.forEach((pass, i) => {
       const plane = planes[i];
       pass.back.clippingPlanes = pass.front.clippingPlanes = [plane];
@@ -62,10 +75,15 @@ export class SectionCaps {
         plane.normal.clone().negate(),
       );
       pass.cap.scale.set(size, size, 1);
-      pass.cap.visible = opaque.some((batch) => batch.mesh.visible);
+      let active = false;
       pass.stencils.forEach(({ batch, back, front }) => {
-        back.visible = front.visible = batch.mesh.visible;
+        const crosses =
+          batch.mesh.visible &&
+          crossesSectionPlane(batch.mesh.geometry.boundingBox, plane);
+        back.visible = front.visible = crosses;
+        active ||= crosses;
       });
+      pass.cap.visible = active;
     });
   }
 

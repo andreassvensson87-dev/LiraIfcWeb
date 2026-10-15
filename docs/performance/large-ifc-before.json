@@ -1,0 +1,130 @@
+{
+  "timestamp": "2026-10-15T11:16:08.149Z",
+  "results": [
+    {
+      "run": 1,
+      "fileBytes": 72882778,
+      "loadMs": 3999,
+      "metadata": {
+        "objects": 11124,
+        "triangles": 1564719,
+        "vertices": 3533089,
+        "batches": 17,
+        "geometryArrayBytes": 207141528,
+        "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36"
+      },
+      "memory": {
+        "emptyHeap": {
+          "usedSize": 14715744,
+          "totalSize": 15384576,
+          "embedderHeapUsedSize": 4325792,
+          "backingStorageSize": 6911786
+        },
+        "loadedHeap": {
+          "usedSize": 21653388,
+          "totalSize": 22528000,
+          "embedderHeapUsedSize": 77659832,
+          "backingStorageSize": 210502451
+        },
+        "snapHeap": {
+          "usedSize": 33497136,
+          "totalSize": 34848768,
+          "embedderHeapUsedSize": 77699840,
+          "backingStorageSize": 210502500
+        },
+        "processRss": [
+          {
+            "type": "browser",
+            "rssBytes": 104103936
+          },
+          {
+            "type": "renderer",
+            "rssBytes": 1427750912
+          },
+          {
+            "type": "GPU",
+            "rssBytes": 257687552
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "rssBytes": 59490304
+          }
+        ],
+        "processRssSumBytes": 1849032704
+      },
+      "rotation": {
+        "renderMs": {
+          "median": 0.30000007152557373,
+          "p95": 0.5,
+          "max": 0.6000000238418579
+        },
+        "frameMs": {
+          "median": 16.699999928474426,
+          "p95": 17,
+          "max": 17.5
+        },
+        "fps": 60.14434642760237
+      },
+      "snap": [
+        {
+          "hits": 5,
+          "pickMs": {
+            "samples": 16,
+            "median": 3.6999999284744263,
+            "p95": 62,
+            "max": 62
+          },
+          "hoverMs": {
+            "samples": 16,
+            "median": 1.399999976158142,
+            "p95": 30162.100000023842,
+            "max": 30162.100000023842
+          },
+          "resolveMs": {
+            "samples": 16,
+            "median": 1.399999976158142,
+            "p95": 30161.700000047684,
+            "max": 30161.700000047684
+          },
+          "visibilityRayMs": {
+            "samples": 1120,
+            "median": 52.199999928474426,
+            "p95": 97.39999997615814,
+            "max": 115.40000009536743
+          },
+          "visibilityTotalMs": 61384.60000002384
+        },
+        {
+          "hits": 5,
+          "pickMs": {
+            "samples": 16,
+            "median": 3.9000000953674316,
+            "p95": 65,
+            "max": 65
+          },
+          "hoverMs": {
+            "samples": 16,
+            "median": 0.19999992847442627,
+            "p95": 35927.60000002384,
+            "max": 35927.60000002384
+          },
+          "resolveMs": {
+            "samples": 16,
+            "median": 0.19999992847442627,
+            "p95": 35923.799999952316,
+            "max": 35923.799999952316
+          },
+          "visibilityRayMs": {
+            "samples": 1120,
+            "median": 63.89999997615814,
+            "p95": 114.60000002384186,
+            "max": 160.79999995231628
+          },
+          "visibilityTotalMs": 74838.49999988079
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

@@ -29,6 +29,7 @@ export function placeIfcModel(model, placement) {
     positions.needsUpdate = normals.needsUpdate = true;
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
+    geometry.boundsTree?.refit();
     for (const range of batch.ranges)
       for (
         let i = range.vertexStart;

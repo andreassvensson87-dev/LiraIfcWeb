@@ -1,0 +1,151 @@
+{
+  "timestamp": "2026-10-15T12:10:23.453Z",
+  "cycles": [
+    {
+      "cycle": 1,
+      "loadMs": 4263,
+      "removeMs": 543,
+      "unloaded": {
+        "usedSize": 23350980,
+        "totalSize": 26198016,
+        "embedderHeapUsedSize": 3511296,
+        "backingStorageSize": 215597730,
+        "workers": 0,
+        "gpuGeometryCount": 2,
+        "gpuTextureCount": 1,
+        "snapRectCount": 11124,
+        "models": 0,
+        "sceneChildren": 5
+      }
+    },
+    {
+      "cycle": 2,
+      "loadMs": 7397,
+      "removeMs": 542,
+      "unloaded": {
+        "usedSize": 24600836,
+        "totalSize": 26722304,
+        "embedderHeapUsedSize": 5766504,
+        "backingStorageSize": 215597766,
+        "workers": 0,
+        "gpuGeometryCount": 2,
+        "gpuTextureCount": 1,
+        "snapRectCount": 11124,
+        "models": 0,
+        "sceneChildren": 5
+      }
+    },
+    {
+      "cycle": 3,
+      "loadMs": 7316,
+      "removeMs": 538,
+      "unloaded": {
+        "usedSize": 24719028,
+        "totalSize": 26460160,
+        "embedderHeapUsedSize": 5752992,
+        "backingStorageSize": 215597802,
+        "workers": 0,
+        "gpuGeometryCount": 2,
+        "gpuTextureCount": 1,
+        "snapRectCount": 11124,
+        "models": 0,
+        "sceneChildren": 5
+      }
+    },
+    {
+      "cycle": 4,
+      "loadMs": 7333,
+      "removeMs": 539,
+      "unloaded": {
+        "usedSize": 24768972,
+        "totalSize": 25935872,
+        "embedderHeapUsedSize": 5748192,
+        "backingStorageSize": 215597838,
+        "workers": 0,
+        "gpuGeometryCount": 2,
+        "gpuTextureCount": 1,
+        "snapRectCount": 11124,
+        "models": 0,
+        "sceneChildren": 5
+      }
+    },
+    {
+      "cycle": 5,
+      "loadMs": 7321,
+      "removeMs": 538,
+      "unloaded": {
+        "usedSize": 24692752,
+        "totalSize": 25935872,
+        "embedderHeapUsedSize": 5756208,
+        "backingStorageSize": 215597874,
+        "workers": 0,
+        "gpuGeometryCount": 2,
+        "gpuTextureCount": 1,
+        "snapRectCount": 11124,
+        "models": 0,
+        "sceneChildren": 5
+      }
+    }
+  ],
+  "rendering": [
+    {
+      "name": "normal",
+      "setupMs": 0.10000002384185791,
+      "fps": 61.46281499392463,
+      "frameP95Ms": 17.600000023841858,
+      "drawCalls": 21,
+      "trianglesPerFrame": 1594173,
+      "geometries": 19
+    },
+    {
+      "name": "edges",
+      "setupMs": 1655.3999999761581,
+      "fps": 52.626962546044446,
+      "frameP95Ms": 17.699999928474426,
+      "drawCalls": 38,
+      "trianglesPerFrame": 1594173,
+      "geometries": 36
+    },
+    {
+      "name": "box-full",
+      "setupMs": 1631.3999999761581,
+      "fps": 47.56242568370987,
+      "frameP95Ms": 17.700000047683716,
+      "drawCalls": 212,
+      "trianglesPerFrame": 20017365,
+      "geometries": 42
+    },
+    {
+      "name": "box-cut",
+      "setupMs": 1672.3999999761581,
+      "fps": 61.443932411674346,
+      "frameP95Ms": 17.799999952316284,
+      "drawCalls": 212,
+      "trianglesPerFrame": 20017365,
+      "geometries": 42
+    },
+    {
+      "name": "box-cut-no-edges",
+      "setupMs": 0.30000007152557373,
+      "fps": 60.32575909768924,
+      "frameP95Ms": 17.799999952316284,
+      "drawCalls": 195,
+      "trianglesPerFrame": 20017365,
+      "geometries": 25
+    }
+  ],
+  "errors": [],
+  "loadedMemory": {
+    "usedSize": 22946856,
+    "totalSize": 24100864,
+    "embedderHeapUsedSize": 77458768,
+    "backingStorageSize": 211192356,
+    "workers": 1,
+    "gpuGeometryCount": 19,
+    "gpuTextureCount": 0,
+    "snapRectCount": 11124,
+    "models": 1,
+    "sceneChildren": 22
+  },
+  "repeatedEdgesMs": 1626.3999999761581
+}

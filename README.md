@@ -53,7 +53,7 @@ Filer skickas inte till någon server. Den lokala lagringen hör till webbläsar
 
 Ingen inloggning, molnlagring, delning eller ärendehantering. Snitt har fyllda, skrafferade ytor för slutna volymer. Fyllningen förutsätter slutna, korrekt orienterade volymer; öppna ytor kan ge ofullständiga snitt. Transparenta material som glas undantas från fyllningen. Mätning snappar till triangelhörn och modellens synliga yta, inte analytiska IFC-kanter. På snittytan mäts den träffade punkten direkt. Viewern renderar med Y som höjdaxel och behåller ett gemensamt lokalt origo mellan importerade modeller. Samordning förutsätter att filerna använder samma ursprungliga koordinatsystem; manuell koordinatkorrigering ingår inte ännu. Sparade vyer kräver att deras ursprungliga modellidentiteter finns i den lokala sessionen.
 
-Representativa stora modeller behöver provas innan någon övre modellstorlek eller FPS-nivå utlovas.
+Ett lokalt före/efter-test med en offentlig IFC på 72,9 MB, 11 124 objekt och 1,56 miljoner trianglar finns i [prestandarapporten](docs/performance.md). Träfftest och snappning använder ett BVH-index från [three-mesh-bvh 0.9.16](https://github.com/gkjohnson/three-mesh-bvh) (MIT). Resultatet är inte ett generellt löfte om modellstorlek eller FPS för andra modeller och datorer.
 
 Specifikation och designreferens finns i `docs/specifikation.md` och `docs/design/modellvisare-koncept-v2.png`.
 

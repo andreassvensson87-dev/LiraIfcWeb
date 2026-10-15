@@ -34,6 +34,11 @@ export class SnapResolver {
     this.reset();
   }
   reset() {
+    // Screen bounds retain object -> batch -> model references. Release them
+    // when leaving a tool or removing a reference, not only on the next hover.
+    this.rects = [];
+    this.stamp = null;
+    this.cameraStamp = null;
     this.chosen = null;
     this.candidates = [];
     this.lines = [];
@@ -91,6 +96,7 @@ export class SnapResolver {
     )
       return false;
     const ray = new THREE.Raycaster();
+    ray.firstHitOnly = v.clippingPlanes.length === 0;
     ray.params.Line.threshold = v.raycaster.params.Line.threshold * 0.25;
     const meshes = v.batches
       .filter((b) => b.mesh.visible && !b.mesh.material.map)

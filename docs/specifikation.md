@@ -66,7 +66,7 @@ Vid borttagning av en modell avslutas dess worker och geometrins GPU-resurser fr
 - Importfel ska visa ett begripligt meddelande och lämna andra öppna modeller användbara.
 - Gränssnittet ska fungera på desktop och med inspektorn som utfällbar panel på mobil.
 
-Prestanda för stora produktionsmodeller behöver mätas med representativa IFC-filer. Modellstorlek och bildfrekvens utlovas först efter sådana mätningar.
+Ett lokalt före/efter-test med en offentlig IFC på 72,9 MB och 1,56 miljoner trianglar finns i [prestandarapporten](performance.md). Träfftest och snappning accelereras med ett BVH-index som behåller objektidentiteter och uppdateras vid ändrad synlighet/placering. Fler produktionsmodeller och Windows/GPU-kombinationer behöver provas innan någon generell modellstorlek eller bildfrekvens utlovas.
 
 ## Fortsatt utveckling av viewern
 

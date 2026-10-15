@@ -12,6 +12,7 @@
     "@mlightcad/libredwg-web": "0.7.15",
     "dxf-parser": "1.1.2",
     "three": "0.180.0",
+    "three-mesh-bvh": "0.9.16",
     "web-ifc": "0.0.78"
   },
   "devDependencies": {

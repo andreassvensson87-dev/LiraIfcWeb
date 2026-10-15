@@ -630,18 +630,30 @@ export class Viewer {
   setEdges(enabled) {
     this.edgesEnabled = enabled;
     this.batches.forEach((batch) => {
+      const geometry = batch.mesh.geometry;
+      const eligible =
+        enabled &&
+        batch.mesh.visible &&
+        !batch.mesh.material.map &&
+        batch.primitiveSize !== 2;
+      if (
+        eligible &&
+        batch.edges &&
+        batch.edgeSourceIndex === geometry.index &&
+        batch.edgeSourceVersion === geometry.attributes.position.version
+      ) {
+        batch.edges.visible = true;
+        return;
+      }
       if (batch.edges) {
         this.scene.remove(batch.edges);
         batch.edges.geometry.dispose();
         batch.edges.material.dispose();
         batch.edges = null;
       }
-      if (
-        enabled &&
-        batch.mesh.visible &&
-        !batch.mesh.material.map &&
-        batch.primitiveSize !== 2
-      ) {
+      batch.edgeSourceIndex = null;
+      batch.edgeSourceVersion = null;
+      if (eligible) {
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(batch.mesh.geometry, 35),
           new THREE.LineBasicMaterial({
@@ -652,6 +664,8 @@ export class Viewer {
           }),
         );
         batch.edges = edges;
+        batch.edgeSourceIndex = geometry.index;
+        batch.edgeSourceVersion = geometry.attributes.position.version;
         this.scene.add(edges);
       }
     });
@@ -664,6 +678,8 @@ export class Viewer {
       (-(event.clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
+    // Clipping can discard the closest triangle, so retain deeper hits there.
+    this.raycaster.firstHitOnly = this.clippingPlanes.length === 0;
     const viewHeight = this.camera.isOrthographicCamera
       ? (this.camera.top - this.camera.bottom) / this.camera.zoom
       : 2 *

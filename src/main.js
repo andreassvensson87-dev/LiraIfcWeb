@@ -482,7 +482,7 @@ function visibilityButton(model, objects, node = null) {
   );
   const name = node ? node.name : model.name;
   const show = visibility !== "all";
-  return `<button class="visibility ${visibility === "all" ? "on" : visibility === "mixed" ? "mixed" : ""}" data-action="${node ? "branch-visibility" : "model-visibility"}" data-model="${model.id}" ${node ? `data-node="${esc(node.id)}"` : ""} ${objects.length ? "" : "disabled"} title="${show ? "Visa" : "Dölj"} ${esc(name)}${visibility === "mixed" ? " · delvis synlig" : ""}" aria-label="${show ? "Visa" : "Dölj"} ${esc(name)}" aria-pressed="${visibility === "all" ? "true" : visibility === "mixed" ? "mixed" : "false"}">${icon(visibility === "all" ? "check" : "minus")}</button>`;
+  return `<button class="visibility ${visibility === "all" ? "on" : visibility === "mixed" ? "mixed" : ""}" data-action="${node ? "branch-visibility" : "model-visibility"}" data-model="${model.id}" ${node ? `data-node="${esc(node.id)}"` : ""} ${objects.length ? "" : "disabled"} title="${show ? "Visa" : "Dölj"} ${esc(name)}${visibility === "mixed" ? " · delvis synlig" : ""}" aria-label="${show ? "Visa" : "Dölj"} ${esc(name)}" aria-pressed="${visibility === "all" ? "true" : visibility === "mixed" ? "mixed" : "false"}">${icon(visibility === "all" ? "eye" : visibility === "mixed" ? "eye-partial" : "hide")}</button>`;
 }
 function matchesTreeObject(object, node) {
   const nodeQuery = state.query.trim().toLocaleLowerCase("sv");
@@ -828,8 +828,12 @@ function setClip(mode) {
 }
 async function removeModel(model, save = true) {
   model.worker?.terminate();
+  model.worker = null;
   viewer.removeModel(model);
   state.models = state.models.filter((m) => m !== model);
+  for (const key of state.expanded)
+    if (key === model.id || key.startsWith(`${model.id}/`))
+      state.expanded.delete(key);
   state.placementHistory = state.placementHistory.filter(
     (entry) => entry.model !== model,
   );
@@ -839,6 +843,7 @@ async function removeModel(model, save = true) {
     state.selected.delete(o.key);
     state.hidden.delete(o.key);
     state.props.delete(o.key);
+    state.isolated?.delete(o.key);
   }
   if (!state.models.length) {
     state.origin = null;

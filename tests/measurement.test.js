@@ -388,3 +388,18 @@ test("Known CAD circle centers snap in empty canvas without inventing straight s
     0,
   );
 });
+
+test("Resetting snapping releases cached model references without requiring another hover", () => {
+  const snap = new SnapResolver({});
+  snap.rects = [
+    { model: { objects: new Array(1000) }, object: { key: "removed:1" } },
+  ];
+  snap.stamp = "old-camera";
+  snap.cameraStamp = "old-camera";
+  snap.chosen = { object: snap.rects[0].object };
+  snap.reset();
+  assert.equal(snap.rects.length, 0);
+  assert.equal(snap.stamp, null);
+  assert.equal(snap.cameraStamp, null);
+  assert.equal(snap.chosen, null);
+});

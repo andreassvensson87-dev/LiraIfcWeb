@@ -99,3 +99,50 @@ test("a hollow solid keeps its opening empty in the cross-section", () => {
   );
   batches.forEach(disposeBatch);
 });
+
+test("Cap passes skip tangent and wholly one-sided batches but retain actual cuts", async () => {
+  const { SectionCaps, crossesSectionPlane } = await import(
+    "../src/section-caps.js"
+  );
+  const bounds = new THREE.Box3(
+    new THREE.Vector3(-1, -1, -1),
+    new THREE.Vector3(1, 1, 1),
+  );
+  const normal = new THREE.Vector3(1, 0, 0);
+  assert.equal(crossesSectionPlane(bounds, new THREE.Plane(normal, 0)), true);
+  assert.equal(crossesSectionPlane(bounds, new THREE.Plane(normal, 1)), false);
+  assert.equal(crossesSectionPlane(bounds, new THREE.Plane(normal, -1)), false);
+  assert.equal(crossesSectionPlane(bounds, new THREE.Plane(normal, 3)), false);
+  const previous = globalThis.document;
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        fillRect() {},
+        beginPath() {},
+        moveTo() {},
+        lineTo() {},
+        stroke() {},
+      }),
+    }),
+  };
+  const scene = new THREE.Scene(),
+    { batches } = fixture(new THREE.BoxGeometry(2, 2, 2));
+  const caps = new SectionCaps(scene);
+  try {
+    caps.update([new THREE.Plane(normal, 1)], bounds, batches);
+    assert.equal(caps.passes[0].cap.visible, false);
+    assert.ok(
+      caps.passes[0].stencils.every((s) => !s.back.visible && !s.front.visible),
+    );
+    caps.update([new THREE.Plane(normal, 0)], bounds, batches);
+    assert.equal(caps.passes[0].cap.visible, true);
+    assert.ok(
+      caps.passes[0].stencils.every((s) => s.back.visible && s.front.visible),
+    );
+  } finally {
+    caps.clear();
+    caps.texture.dispose();
+    batches.forEach(disposeBatch);
+    globalThis.document = previous;
+  }
+});
