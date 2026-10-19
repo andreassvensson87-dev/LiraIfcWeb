@@ -40,14 +40,19 @@ export function saveSettings(settings) {
   }
 }
 
-export async function storePlacement(id, placement) {
+export async function storePlacement(id, placement, unitConfirmed) {
   const db = await database();
   return new Promise((resolve, reject) => {
     const tx = db.transaction("files", "readwrite"),
       store = tx.objectStore("files");
     const request = store.get(id);
     request.onsuccess = () => {
-      if (request.result) store.put({ ...request.result, placement });
+      if (request.result)
+        store.put({
+          ...request.result,
+          placement,
+          ...(unitConfirmed === undefined ? {} : { unitConfirmed }),
+        });
     };
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);

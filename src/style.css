@@ -1804,3 +1804,18 @@ dialog .primary {
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
+
+.cad-unit-dialog {
+  width: min(440px, calc(100vw - 32px));
+}
+.cad-unit-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.cad-unit-dialog .unit-preview {
+  min-height: 20px;
+  font-size: 12px;
+  color: var(--muted);
+}

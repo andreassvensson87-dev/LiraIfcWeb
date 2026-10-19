@@ -4,13 +4,8 @@ import * as THREE from "three";
 // DXF entity expansion adapted from the user's LiraStructureWeb importer.
 const blankFrame = () => ({ entities: [] });
 
-export const dxfUnits = [
-  { name: "Millimeter", code: 4, factor: 1 },
-  { name: "Centimeter", code: 5, factor: 10 },
-  { name: "Meter", code: 6, factor: 1000 },
-  { name: "Tum", code: 1, factor: 25.4 },
-  { name: "Fot", code: 2, factor: 304.8 },
-];
+export { dxfUnits } from "./cad-units.js";
+
 export function parseFrameDXF(source) {
   if (source.startsWith("AutoCAD Binary DXF"))
     throw Error("Välj en DXF i textformat (ASCII).");

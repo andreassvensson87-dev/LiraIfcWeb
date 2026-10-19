@@ -9,6 +9,15 @@
   "display": "standalone",
   "background_color": "#e9eef0",
   "theme_color": "#192f35",
+  "file_handlers": [
+    {
+      "action": "./",
+      "name": "IFC-modell",
+      "accept": { "application/x-step": [".ifc"] },
+      "launch_type": "single-client"
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" },
   "icons": [
     {
       "src": "icon-32.png",

@@ -55,8 +55,8 @@ export function readCadDrawing(source, { solids = [] } = {}) {
   const unit = dxfUnits.find((unit) => unit.code === doc.header?.$INSUNITS);
   return {
     entities: result.frame.entities,
-    unitFactor: (unit?.factor || 1) / 1000,
-    unitName: unit?.name || "Millimeter (antagen)",
+    unitFactor: unit ? unit.factor / 1000 : null,
+    unitName: unit?.name || "Ej angiven",
     unitKnown: !!unit,
     skipped: [...new Set([...result.skipped, ...warnings])],
   };

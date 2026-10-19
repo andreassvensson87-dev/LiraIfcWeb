@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import "./style.css";
 import { watchAppUpdate } from "./app-update.js";
+import { registerFileHandling } from "./file-handling.js";
 import { buildCadModel, initialCadOrigin } from "./cad-model.js";
+import { dxfUnits, cadImportUnit } from "./cad-units.js";
+import { chooseCadUnit } from "./cad-unit-dialog.js";
 import { icon } from "./icons.js";
 import { geometryNames } from "./measurement-tool.js";
 import { snapNames } from "./snap-resolver.js";
@@ -539,13 +542,7 @@ function modelsPanel() {
 }
 function cadPlacementPanel(model) {
   const p = model.placement;
-  const units = [
-    [0.001, "Millimeter"],
-    [0.01, "Centimeter"],
-    [1, "Meter"],
-    [0.0254, "Tum"],
-    [0.3048, "Fot"],
-  ];
+  const units = dxfUnits.map((unit) => [unit.factor / 1000, unit.name]);
   return `<div class="cad-placement">${model.cadData ? `<label>Enhet<select aria-label="Enhet för ${esc(model.name)}" data-cad-model="${model.id}" data-placement="unitFactor">${units.map(([factor, name]) => `<option value="${factor}" ${p.unitFactor === factor ? "selected" : ""}>${name}</option>`).join("")}</select></label>` : ""}${[
     ["x", "X-förskjutning (m)"],
     ["z", "Z-förskjutning (m)"],
@@ -558,7 +555,7 @@ function cadPlacementPanel(model) {
     )
     .join(
       "",
-    )}<button class="wide-button" data-action="pick-placement" data-model="${model.id}">${icon("cursor")} Flytta med två punkter</button><button class="compact" data-action="undo-placement" data-model="${model.id}" ${state.placementHistory.some((entry) => entry.model === model) ? "" : "disabled"}>Ångra flytt</button><button class="compact" data-action="center-cad" data-model="${model.id}">${icon("fit")} Placera vid modellen</button><p class="muted">${model.cadData ? `Ritningens XY visas i modellens XZ-plan; Z blir höjd. ${model.cadData.unitKnown ? "" : "Filen saknar känd enhet; kontrollera vald enhet."}` : "Förskjutning anges i meter. Rotation sker runt den gemensamma modellnollpunkten."}</p>${model.cadData?.skipped.length ? `<p class="muted">Importanmärkningar: ${esc(model.cadData.skipped.join(", "))}</p>` : ""}</div>`;
+    )}<button class="wide-button" data-action="pick-placement" data-model="${model.id}">${icon("cursor")} Flytta med två punkter</button><button class="compact" data-action="undo-placement" data-model="${model.id}" ${state.placementHistory.some((entry) => entry.model === model) ? "" : "disabled"}>Ångra flytt</button><button class="compact" data-action="center-cad" data-model="${model.id}">${icon("fit")} Placera vid modellen</button><p class="muted">${model.cadData ? `Ritningens XY visas i modellens XZ-plan; Z blir höjd. ${model.cadData.unitKnown ? "" : "Enheten har valts vid import och sparas med filen."}` : "Förskjutning anges i meter. Rotation sker runt den gemensamma modellnollpunkten."}</p>${model.cadData?.skipped.length ? `<p class="muted">Importanmärkningar: ${esc(model.cadData.skipped.join(", "))}</p>` : ""}</div>`;
 }
 function openCadPlacement(model) {
   if (!model) return;
@@ -630,7 +627,11 @@ async function applyCadPlacement(model, values, recordHistory = true) {
   toolState();
   viewer.fit();
   try {
-    await storePlacement(model.id, placement);
+    await storePlacement(
+      model.id,
+      placement,
+      model.cadData && "unitFactor" in values ? true : undefined,
+    );
   } catch {
     notify("Placeringen ändrades men kunde inte sparas lokalt.");
   }
@@ -1027,15 +1028,20 @@ async function importCadRecord(record, persistFile) {
         return;
       }
       if (data.type !== "done") return;
+      worker.terminate();
       try {
-        const origin = state.origin || initialCadOrigin(data);
-        const placement = record.placement || {
-          unitFactor: data.unitFactor,
+        const unitFactor =
+          cadImportUnit(data, record) ??
+          (await chooseCadUnit(record.name, data));
+        const placement = {
           x: 0,
           z: 0,
           elevation: 0,
           rotation: 0,
+          ...record.placement,
+          unitFactor,
         };
+        const origin = state.origin || initialCadOrigin(data, unitFactor);
         const model = buildCadModel({
           id: record.id,
           name: record.name,
@@ -1050,13 +1056,12 @@ async function importCadRecord(record, persistFile) {
         });
         state.origin ||= origin;
         registerModel(model);
-        worker.terminate();
         refresh();
         viewer.fit();
         persist();
-        if (persistFile)
+        if (!record.demo)
           try {
-            await storePlacement(record.id, placement);
+            await storePlacement(record.id, placement, true);
           } catch {
             notify("Placeringen kunde inte sparas lokalt.");
           }
@@ -1071,7 +1076,14 @@ async function importCadRecord(record, persistFile) {
     worker.postMessage({ format, buffer: record.buffer }, [record.buffer]);
   });
 }
-async function importFiles(files) {
+let importQueue = Promise.resolve();
+function importFiles(files) {
+  const pendingFiles = [...files];
+  const pending = importQueue.then(() => importFilesNow(pendingFiles));
+  importQueue = pending.catch(() => {});
+  return pending;
+}
+async function importFilesNow(files) {
   if (state.loading) {
     notify("Vänta tills den pågående importen är klar.");
     return;
@@ -1831,4 +1843,5 @@ watchAppUpdate({
     );
   },
 });
-start();
+importQueue = start().catch((error) => notify(error.message));
+registerFileHandling({ openFiles: importFiles, onError: notify });

@@ -10,17 +10,24 @@ export function cadPoint(point, placement, origin) {
     -(x * Math.sin(angle) + y * Math.cos(angle)) - origin[2] + placement.z,
   ];
 }
-export function initialCadOrigin(data) {
-  const points = data.entities.flatMap(
-    (entity) => entity.points || [entity.point],
-  );
-  return [
-    Math.min(...points.slice(0, 10000).map((point) => point[0])) *
-      data.unitFactor,
-    0,
-    -Math.max(...points.slice(0, 10000).map((point) => point[1])) *
-      data.unitFactor,
-  ];
+export function cadBounds(data) {
+  const min = [Infinity, Infinity, Infinity],
+    max = [-Infinity, -Infinity, -Infinity];
+  for (const entity of data.entities)
+    for (const point of entity.points || [entity.point]) {
+      if (!point) continue;
+      for (let i = 0; i < 3; i++) {
+        min[i] = Math.min(min[i], point[i] || 0);
+        max[i] = Math.max(max[i], point[i] || 0);
+      }
+    }
+  return { min, max };
+}
+export function initialCadOrigin(data, unitFactor = data.unitFactor) {
+  if (!(unitFactor > 0) || !Number.isFinite(unitFactor))
+    throw Error("Välj ritningens enhet.");
+  const { min, max } = cadBounds(data);
+  return [min[0] * unitFactor, 0, -max[1] * unitFactor];
 }
 export function buildCadModel(model) {
   const data = model.cadData,
