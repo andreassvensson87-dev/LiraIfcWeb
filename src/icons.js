@@ -1,4 +1,8 @@
 const paths = {
+  refresh:
+    '<path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/>',
+  "link-broken":
+    '<path d="m9 15-1 1a4 4 0 0 1-6-6l3-3a4 4 0 0 1 5.5-.2M15 9l1-1a4 4 0 0 1 6 6l-3 3a4 4 0 0 1-5.5.2M9 9l6 6M5 2v3M2 5h3M19 22v-3M22 19h-3"/>',
   "rotate-left": '<path d="M4 10a8 8 0 1 1 3 10M4 4v6h6"/>',
   "rotate-right": '<path d="M20 10a8 8 0 1 0-3 10M20 4v6h-6"/>',
   folder: '<path d="M3 7h7l2 2h9v11H3z"/><path d="M3 7V4h7l2 3h9v2"/>',

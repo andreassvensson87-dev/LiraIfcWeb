@@ -80,3 +80,23 @@ test("Empty launches, unsupported browsers and failed imports remain usable", as
   assert.equal(attempts, 2);
   assert.equal(errors.length, 2);
 });
+
+test("Opening IFC from the OS retains the original file handle for monitoring", async () => {
+  let consume, received;
+  const file = new File(["IFC"], "A.ifc"),
+    handle = { kind: "file", name: "A.ifc", getFile: async () => file };
+  registerFileHandling({
+    launchQueue: {
+      setConsumer: (callback) => {
+        consume = callback;
+      },
+    },
+    onError: assert.fail,
+    openFiles: async (files, handles) => {
+      received = { files, handles };
+    },
+  });
+  await consume({ files: [handle] });
+  assert.equal(received.files[0], file);
+  assert.equal(received.handles.get(file), handle);
+});

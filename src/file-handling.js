@@ -11,16 +11,19 @@ export function registerFileHandling({
     pending = pending
       .then(async () => {
         const files = [];
+        const handles = new Map();
         for (const handle of params.files || []) {
           try {
             const file = await handle.getFile();
-            if (/\.ifc$/i.test(file.name)) files.push(file);
-            else onError(`${file.name}: Välj en IFC-fil.`);
+            if (/\.ifc$/i.test(file.name)) {
+              files.push(file);
+              handles.set(file, handle);
+            } else onError(`${file.name}: Välj en IFC-fil.`);
           } catch {
             onError(`${handle.name || "IFC-filen"}: Filen kunde inte öppnas.`);
           }
         }
-        if (files.length) await openFiles(files);
+        if (files.length) await openFiles(files, handles);
       })
       .catch((error) =>
         onError(`Filen kunde inte importeras: ${error.message}`),

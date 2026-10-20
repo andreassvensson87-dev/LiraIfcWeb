@@ -1,5 +1,15 @@
+import { captureDroppedFiles } from "./dropped-files.js";
+import {
+  SourceMonitor,
+  createSourceLink,
+  createFileSource,
+  sourceAccessHandle,
+  fileStamp,
+  sourceFile,
+} from "./source-monitor.js";
 import * as THREE from "three";
 import "./style.css";
+import { processProject } from "./project-io.js";
 import { watchAppUpdate } from "./app-update.js";
 import { registerFileHandling } from "./file-handling.js";
 import { buildCadModel, initialCadOrigin } from "./cad-model.js";
@@ -37,10 +47,13 @@ import {
 } from "./model-state.js";
 import {
   storedFiles,
+  storedFile,
+  storeSource,
   storeFile,
   storePlacement,
   deleteFile,
   clearStoredFiles,
+  replaceStoredFiles,
   readSettings,
   saveSettings,
 } from "./storage.js";
@@ -48,6 +61,7 @@ import {
 const $ = (s) => document.querySelector(s);
 const settings = readSettings();
 const state = {
+  projectName: settings.projectName || "LiraIFC-projekt",
   models: [],
   selected: new Set(),
   selectedBranches: new Map(),
@@ -81,6 +95,7 @@ $("#app").innerHTML = `
     <div class="header-right"><button class="header-new-project" data-action="new-project" title="Börja med ett tomt projekt">${icon("plus")} Nytt projekt</button><button id="app-update" class="lira-update" title="Kontrollera om det finns en ny version av LiraIFC">Sök uppdatering</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna modell</button></div>
   </header>
   <nav class="ribbon" aria-label="Modellverktyg">
+    <div class="ribbon-group project-commands"><div class="commands">${command("open-project", "Öppna projekt", "folder")}${command("save-project", "Spara projekt", "save")}</div><span class="group-label">Projekt</span></div>
     <div class="ribbon-group"><div class="commands">${command("open", "Öppna modell", "folder")}${command("demo", "Demomodell", "models")}</div><span class="group-label">Modell</span></div>
     <div class="ribbon-group"><div class="commands">${command("isolate", "Isolera", "isolate", "data-selection")}${command("hide", "Dölj", "hide", "data-selection")}${command("show-all", "Visa alla", "eye")}</div><span class="group-label">Urval</span></div>
     <div class="ribbon-group"><div class="commands">${command("measure", "Mät", "ruler", 'aria-pressed="false"')}${command("section", "Snitt", "cut", 'aria-pressed="false"')}${command("section-box", "Snittbox", "box", 'aria-pressed="false"')}</div><span class="group-label">Granska</span></div>
@@ -113,7 +128,8 @@ $("#app").innerHTML = `
     </aside>
   </main>
   <footer class="statusbar"><div class="status-counts"><span id="model-count">0 modeller</span><span id="object-count">0 objekt</span><span id="selection-count">Inget valt</span></div><span id="status-message" role="status">Öppnar viewer…</span><div class="view-controls"><select id="projection" aria-label="Projektion"><option value="perspective">Perspektiv</option><option value="orthographic">Ortografisk</option></select><select id="level-filter" aria-label="Våning"><option value="">Alla våningar</option></select><button class="compact" data-action="fit">${icon("fit")} Passa vy</button><span class="unit-label">m</span></div></footer>
-  <input id="file-input" type="file" accept=".ifc,.dxf,.dwg" multiple hidden />
+  <input id="project-input" type="file" accept=".liraifc" hidden />
+  <input id="file-input" type="file" accept=".ifc,.dxf,.dwg,.liraifc" multiple hidden />
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="help-dialog"><div class="dialog-heading"><h2>LiraIFC</h2>${small("close-dialog", "Stäng", "close")}</div><p>Granska IFC-modeller direkt i webbläsaren. Modeller och sparade vyer lagras lokalt i denna webbläsare.</p><p class="muted">Med styrplatta panorerar tvåfingerscroll och nypning zoomar. Orbit startar runt punkten under pekaren när den träffar modellen.</p><dl class="shortcuts"><dt>Välj objekt</dt><dd>Klicka med vänster musknapp</dd><dt>Orbit</dt><dd>Shift/Ctrl/Cmd + mitten- eller högerdrag</dd><dt>Panorera</dt><dd>Dra med mitten- eller högerknappen</dd><dt>Zooma</dt><dd>Scrolla mot muspekaren eller nyp</dd><dt>Välj flera</dt><dd>Shift/Ctrl/Cmd + klick</dd><dt>Rektangelmarkering</dt><dd>Vänsterdra. Blå ruta väljer helt inneslutna objekt, grön ruta väljer berörda objekt. Shift lägger till; Esc avbryter.</dd><dt>Objektmeny</dt><dd>Högerklick på markeringen</dd><dt>Fokusera objekt</dt><dd>Dubbelklick</dd><dt>Passa vy</dt><dd>F</dd><dt>Mät avstånd</dt><dd>M</dd><dt>Dölj markering</dt><dd>H</dd><dt>Visa alla</dt><dd>A</dd><dt>Avbryt verktyg</dt><dd>Esc</dd></dl><p class="muted">Mått kan visas i meter, centimeter eller millimeter. Snapmarkören visar typen av geometripunkt; Tab växlar mellan alternativ. Snittplan och snittbox visar fyllda, skrafferade snittytor i slutna volymer.</p><button class="primary" data-action="close-dialog">Tillbaka till modellen</button></dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Inställningar</h2>${small("close-dialog", "Stäng", "close")}</div><fieldset class="navigation-settings"><legend>Navigationsinställningar</legend><label class="field-label">Inmatning<select id="navigation-device"><option value="mouse">Mus</option><option value="trackpad">Styrplatta</option></select></label><label class="field-label" for="navigation-zoom-speed">Zoomhastighet <output id="navigation-zoom-value" for="navigation-zoom-speed">100 %</output><input id="navigation-zoom-speed" aria-label="Zoomhastighet" type="range" min="25" max="400" step="5" value="100"/></label><button class="text-button" data-action="reset-zoom-speed">Återställ zoomhastighet</button><label class="navigation-toggle"><span>Invertera zoomriktning</span><input id="navigation-zoom-inverted" type="checkbox"/></label><label class="navigation-toggle"><span>Dämpad orbit</span><input id="navigation-orbit-damping" type="checkbox" checked/></label><p class="muted">Inställningarna sparas automatiskt. Invertering gäller scrollzoom; nypning behåller sin naturliga riktning.</p></fieldset><button class="primary" data-action="close-dialog">Stäng</button></dialog>
@@ -159,6 +175,12 @@ try {
   throw error;
 }
 
+const sourceMonitor = new SourceMonitor({
+  onChange: updateSourceIndicator,
+  isBusy: () => state.loading || document.hidden,
+});
+sourceMonitor.start({ window, document });
+
 function format(n) {
   return n.toLocaleString("sv", { maximumFractionDigits: 3 });
 }
@@ -179,6 +201,7 @@ function persist() {
   if (
     !saveSettings({
       initialized: true,
+      projectName: state.projectName,
       grouping: state.grouping,
       views: state.views,
       origin: state.origin,
@@ -340,7 +363,27 @@ function openObjectMenu(object, event, branch = null) {
       ["hide", "Göm", "hide"],
       [branch ? "isolate-branch" : "isolate", "Isolera", "isolate"],
       ...(branch && !branch.node
-        ? [["cad-placement", "Placering…", "settings", false, branch.model.id]]
+        ? [
+            ["cad-placement", "Placering…", "settings", false, branch.model.id],
+            ...(!branch.model.demo
+              ? [
+                  [
+                    "link-source-folder",
+                    "Koppla originalmapp…",
+                    "folder",
+                    false,
+                    branch.model.id,
+                  ],
+                  [
+                    "refresh-reference",
+                    "Uppdatera referens",
+                    "refresh",
+                    !sourceMonitor.links.has(branch.model.id),
+                    branch.model.id,
+                  ],
+                ]
+              : []),
+          ]
         : []),
     ],
     event,
@@ -518,7 +561,7 @@ function renderTreeNode(model, node) {
 function modelsPanel() {
   const types = [...new Set(allObjects().map((o) => o.ifcClass))].sort();
   const queryActive = state.query || state.type;
-  return `<div class="panel-heading"><h1>Modeller</h1><div>${small("open", "Lägg till IFC-modell", "plus")}</div></div>
+  return `<div class="panel-heading"><h1>Modeller</h1><div>${small("link-source-folder", "Koppla originalmapp för automatisk kontroll", "folder")}${small("open", "Lägg till IFC-modell", "plus")}</div></div>
     <div class="search-field">${icon("search")}<input id="object-search" placeholder="Sök objekt, typ eller GUID" aria-label="Sök objekt" value="${esc(state.query)}"/></div>
     <label class="grouping-field">Indelning<select id="tree-grouping" aria-label="Indelning i modellträdet">${[
       ["ifc", "IFC-struktur"],
@@ -538,7 +581,7 @@ function modelsPanel() {
         ? `<div class="results-label">${treeSearchCount().toLocaleString("sv")} träffar</div>`
         : ""
     }
-    <div class="model-tree">${state.models.map((model) => `<details data-tree="${model.id}" ${queryActive || state.expanded.has(model.id) ? "open" : ""}><summary class="model-root ${state.selectedBranches.has(branchKey(model)) ? "selected-branch" : ""}">${icon("folder")}<span class="model-filename" title="${esc(model.name)} · ${model.objects.length.toLocaleString("sv")} objekt · ${esc(model.schema)}">${esc(model.name)}</span>${visibilityButton(model, model.objects)}${small("remove-model", `Ta bort ${model.name}`, "close", `data-model="${model.id}"`)}</summary>${model.trees[state.grouping].roots.map((node) => renderTreeNode(model, node)).join("")}${model.groupWarning && ["systems", "zones"].includes(state.grouping) ? `<p class="muted">${esc(model.groupWarning)}</p>` : ""}</details>`).join("")}</div>
+    <div class="model-tree">${state.models.map((model) => `<details data-tree="${model.id}" ${queryActive || state.expanded.has(model.id) ? "open" : ""}><summary class="model-root ${state.selectedBranches.has(branchKey(model)) ? "selected-branch" : ""}">${icon("folder")}<span class="model-filename" title="${esc(model.name)} · ${model.objects.length.toLocaleString("sv")} objekt · ${esc(model.schema)}">${esc(model.name)}</span><span class="source-status" data-source-id="${model.id}">${sourceIndicator(model.id)}</span>${visibilityButton(model, model.objects)}${small("remove-model", `Ta bort ${model.name}`, "close", `data-model="${model.id}"`)}</summary>${model.trees[state.grouping].roots.map((node) => renderTreeNode(model, node)).join("")}${model.groupWarning && ["systems", "zones"].includes(state.grouping) ? `<p class="muted">${esc(model.groupWarning)}</p>` : ""}</details>`).join("")}</div>
     <div class="panel-note">${icon("properties")}<span>${state.models.some((model) => model.demo) ? "Demomodell · genererad geometri för att prova viewern." : "Filer bearbetas och sparas lokalt i denna webbläsare."}</span></div>`;
 }
 function cadPlacementPanel(model) {
@@ -560,6 +603,10 @@ function cadPlacementPanel(model) {
 }
 function openCadPlacement(model) {
   if (!model) return;
+  if (state.loading) {
+    notify("Vänta tills den pågående importen är klar.");
+    return;
+  }
   viewer.setTool("select");
   toolState();
   const dialog = $("#cad-placement-dialog");
@@ -829,6 +876,7 @@ function setClip(mode) {
   renderPanel();
 }
 async function removeModel(model, save = true) {
+  sourceMonitor.set(model.id, null);
   model.worker?.terminate();
   model.worker = null;
   viewer.removeModel(model);
@@ -862,6 +910,428 @@ async function removeModel(model, save = true) {
   refresh();
   toolState();
 }
+function sourceIndicator(id) {
+  const status = sourceMonitor.status(id);
+  if (!status) return "";
+  const changed = status === "changed";
+  const action = changed
+    ? "refresh-reference"
+    : status === "permission"
+      ? "source-permission"
+      : "link-source-folder";
+  const title = changed
+    ? "Ny filversion i originalmappen – uppdatera referensen"
+    : status === "missing"
+      ? "Originalfilen saknas – koppla originalmappen igen"
+      : status === "permission"
+        ? "Ge läsbehörighet för att kontrollera originalfilen"
+        : "Originalmappen kunde inte kontrolleras – koppla mappen igen";
+  return `<button class="icon-button source-indicator source-${status}" data-action="${action}" data-model="${id}" title="${title}" aria-label="${title}">${icon(changed ? "refresh" : "link-broken")}</button>`;
+}
+function updateSourceIndicator(id) {
+  const wrapper = document.querySelector(
+    `[data-source-id="${CSS.escape(id)}"]`,
+  );
+  if (wrapper) wrapper.innerHTML = sourceIndicator(id);
+}
+async function chooseSourceFolder(modelId) {
+  if (state.loading) {
+    notify("Vänta tills den pågående importen är klar.");
+    return;
+  }
+  if (!window.showDirectoryPicker) {
+    notify("Koppling till originalmapp kräver Chrome eller Edge på datorn.");
+    return;
+  }
+  try {
+    // Must open the picker directly from the user's click, before queued work.
+    const directory = await window.showDirectoryPicker({
+      id: "lira-original-references",
+      mode: "read",
+    });
+    importQueue = importQueue
+      .then(() => linkSourceFolder(directory, modelId))
+      .catch((error) => notify(error.message));
+  } catch (error) {
+    if (error.name !== "AbortError")
+      notify(
+        "Originalmappen kunde inte kopplas. Ge appen läsbehörighet och försök igen.",
+      );
+  }
+}
+async function linkSourceFolder(directory, modelId) {
+  let linked = 0,
+    failed = 0;
+  state.loading = true;
+  try {
+    for (const model of state.models.filter(
+      (model) => !model.demo && (!modelId || model.id === modelId),
+    )) {
+      try {
+        const file = await (
+          await directory.getFileHandle(model.name, { create: false })
+        ).getFile();
+        const record = await storedFile(model.id);
+        if (!record) throw Error("Ingen lokal filkopia");
+        const source = await createSourceLink(directory, record, file);
+        await storeSource(model.id, source);
+        sourceMonitor.set(model.id, source);
+        linked++;
+      } catch {
+        failed++;
+      }
+    }
+    notify(
+      linked
+        ? `${linked} referenser kopplade till ${directory.name}.${failed ? ` ${failed} filer hittades inte i mappen.` : " Automatisk kontroll är aktiv."}`
+        : "Inga referensfiler hittades i den valda mappen. Välj mappen som innehåller originalfilerna.",
+    );
+  } finally {
+    state.loading = false;
+    await sourceMonitor.check();
+  }
+}
+async function grantSourcePermission(id) {
+  const source = sourceMonitor.links.get(id);
+  if (!source) return;
+  try {
+    if (
+      (await sourceAccessHandle(source).requestPermission({ mode: "read" })) !==
+      "granted"
+    ) {
+      notify("Läsbehörighet behövs för att kontrollera originalfilerna.");
+      return;
+    }
+    await sourceMonitor.check();
+  } catch {
+    notify("Läsbehörighet kunde inte ges. Koppla originalmappen igen.");
+  }
+}
+function disposeStagedReference(model) {
+  model?.worker?.terminate();
+  const textures = new Set(
+    model?.parts?.map((part) => part.texture).filter(Boolean),
+  );
+  textures.forEach((texture) => texture.dispose());
+}
+async function refreshReference(id) {
+  const old = state.models.find((model) => model.id === id);
+  const source = sourceMonitor.links.get(id);
+  if (!old || !source) return;
+  if (state.loading) {
+    notify("Vänta tills den pågående importen är klar.");
+    return;
+  }
+  await state.undoTask;
+  state.loading = true;
+  const camera = viewer.cameraSnapshot(),
+    section = structuredClone(viewer.section);
+  const origin = state.origin,
+    index = state.models.indexOf(old),
+    visible = old.visible;
+  const oldIsolated = state.isolated ? new Set(state.isolated) : null;
+  const hiddenGlobalIds = new Set(
+    old.objects
+      .filter((o) => o.globalId && state.hidden.has(o.key))
+      .map((o) => o.globalId),
+  );
+  const selectedGlobalIds = new Set(
+    old.objects
+      .filter((o) => o.globalId && state.selected.has(o.key))
+      .map((o) => o.globalId),
+  );
+  const isolatedGlobalIds = new Set(
+    old.objects
+      .filter((o) => o.globalId && state.isolated?.has(o.key))
+      .map((o) => o.globalId),
+  );
+  let staged,
+    backup,
+    swapped = false,
+    stored = false;
+  try {
+    viewer.setTool("select");
+    $("#cad-placement-dialog").close();
+    const file = await sourceFile(source);
+    if (/\.(dwg|dxf)$/i.test(old.name) && file.size > 50 * 1024 ** 2)
+      throw Error("CAD-filer får vara högst 50 MB.");
+    backup = await storedFile(id);
+    if (!backup)
+      throw Error("Den lokala filkopian saknas. Öppna referensen på nytt.");
+    const record = {
+      ...backup,
+      size: file.size,
+      buffer: await file.arrayBuffer(),
+      placement: { ...old.placement },
+      unitConfirmed: true,
+      sourceStamp: fileStamp(file),
+      source: { ...source, baseline: fileStamp(file) },
+    };
+    // Parse first; the old reference remains visible and intact if reading fails.
+    staged = await importRecord(
+      { ...record, buffer: record.buffer.slice(0) },
+      false,
+      true,
+    );
+    await storeFile(record);
+    stored = true;
+    await removeModel(old, false);
+    swapped = true;
+    staged.visible = visible;
+    staged.color = old.color;
+    registerModel(staged);
+    state.models.splice(state.models.indexOf(staged), 1);
+    state.models.splice(index, 0, staged);
+    // IFC express IDs can change across revisions. Reuse only stable GlobalIds.
+    for (const object of staged.objects) {
+      if (hiddenGlobalIds.has(object.globalId)) state.hidden.add(object.key);
+      if (selectedGlobalIds.has(object.globalId))
+        state.selected.add(object.key);
+    }
+    if (oldIsolated) {
+      const oldKeys = new Set(old.objects.map((o) => o.key));
+      state.isolated = new Set(
+        [...oldIsolated].filter((key) => !oldKeys.has(key)),
+      );
+      for (const object of staged.objects)
+        if (isolatedGlobalIds.has(object.globalId))
+          state.isolated.add(object.key);
+    }
+    sourceMonitor.set(id, record.source);
+    viewer.setSection(section);
+    refresh();
+    viewer.restoreCamera(camera);
+    toolState();
+    persist();
+    notify(`${old.name} uppdaterad · Placering, rotation och skala behölls.`);
+  } catch (error) {
+    if (swapped) {
+      const candidate = state.models.find((model) => model.id === id);
+      if (candidate) await removeModel(candidate, false);
+    } else disposeStagedReference(staged);
+    if (stored) {
+      try {
+        await storeFile(backup);
+        if (swapped) {
+          state.origin = origin;
+          await importRecord(
+            { ...backup, buffer: backup.buffer.slice(0) },
+            false,
+          );
+          const restored = state.models.find((model) => model.id === id);
+          restored.visible = visible;
+        }
+      } catch {
+        notify(
+          "Referensen kunde inte återställas i vyn. Den tidigare filkopian finns kvar lokalt.",
+        );
+      }
+    }
+    state.origin = origin;
+    sourceMonitor.set(id, source);
+    viewer.setSection(section);
+    refresh();
+    viewer.restoreCamera(camera);
+    notify(
+      `${old.name}: Uppdateringen misslyckades. Den tidigare versionen behålls. ${error.message}`,
+    );
+  } finally {
+    state.loading = false;
+    $("#loading").hidden = true;
+    await sourceMonitor.check();
+  }
+}
+
+function projectSnapshot(files) {
+  const records = new Map(files.map((file) => [file.id, file]));
+  const models = state.models.filter((model) => !model.demo);
+  return {
+    name: state.projectName,
+    origin: state.origin,
+    grouping: state.grouping,
+    view: viewSnapshot(
+      models,
+      state.hidden,
+      state.isolated,
+      viewer.cameraSnapshot(),
+      viewer.section,
+    ),
+    views: state.views.filter((view) => canRestoreView(view, models)),
+    display: {
+      colorMode: viewer.colorMode,
+      edges: viewer.edgesEnabled,
+      grid: viewer.grid.visible,
+    },
+    files: models.map((model) => {
+      const record = records.get(model.id);
+      if (!record?.buffer?.byteLength)
+        throw Error(
+          `${model.name}: Originalfilen saknas i den lokala lagringen. Öppna referensen på nytt innan projektet sparas.`,
+        );
+      return {
+        ...record,
+        placement: { ...model.placement },
+        unitConfirmed: true,
+      };
+    }),
+  };
+}
+function applyProjectView(project) {
+  state.projectName = project.name;
+  state.grouping = project.grouping;
+  state.views = project.views;
+  const view = project.view;
+  if (view) {
+    state.models.forEach((model) => {
+      model.visible = view.visibility[model.id] ?? true;
+    });
+    state.hidden = new Set(view.hidden);
+    state.isolated = view.isolated ? new Set(view.isolated) : null;
+    viewer.setSection(view.section);
+    viewer.restoreCamera(view.camera);
+    $("#projection").value = view.camera.projection;
+  }
+  if (project.display) {
+    viewer.setColorMode(project.display.colorMode);
+    viewer.setEdges(project.display.edges);
+    viewer.grid.visible = project.display.grid;
+    $("#color-mode").value = project.display.colorMode;
+    document
+      .querySelector('[data-action="edges"]')
+      .setAttribute("aria-pressed", project.display.edges);
+    document
+      .querySelector('[data-action="grid"]')
+      .setAttribute("aria-pressed", project.display.grid);
+  }
+  setTab("models");
+  refresh();
+  toolState();
+  persist();
+}
+async function loadProjectReferences(project) {
+  state.origin = project.origin;
+  state.grouping = project.grouping;
+  // Keep project buffers available until the whole project has opened, including rollback.
+  for (const record of project.files) {
+    try {
+      await importRecord({ ...record, buffer: record.buffer.slice(0) }, false);
+    } catch {
+      throw Error(
+        `Referensen ${record.name} kunde inte öppnas. Kontrollera originalfilen.`,
+      );
+    }
+  }
+  applyProjectView(project);
+}
+async function saveProject() {
+  if (state.loading) {
+    notify("Vänta tills den pågående importen är klar.");
+    return;
+  }
+  if (state.models.some((model) => model.demo)) {
+    notify(
+      "Öppna dina egna referenser innan projektet sparas. Demomodellen är endast ett visningsexempel.",
+    );
+    return;
+  }
+  state.loading = true;
+  try {
+    await state.undoTask;
+    status("Packar projekt med alla referenser…");
+    const project = projectSnapshot(await storedFiles());
+    const { bytes } = await processProject({ type: "save", project });
+    const url = URL.createObjectURL(
+      new Blob([bytes], { type: "application/zip" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${state.projectName.replace(/[\\/:*?"<>|]/g, "_")}.liraifc`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    notify(`Projektfil skapad · ${project.files.length} referenser ingår.`);
+  } finally {
+    state.loading = false;
+  }
+}
+async function openProject(file) {
+  state.loading = true;
+  let previous,
+    previousFiles,
+    wasDemo = false,
+    replaced = false;
+  try {
+    $("#loading").hidden = false;
+    $("#loading-name").textContent = file.name;
+    $("#loading-status").textContent =
+      "Kontrollerar projektfil och referenser…";
+    // Validate every embedded file before touching the current project or storage.
+    const { project } = await processProject({
+      type: "open",
+      buffer: await file.arrayBuffer(),
+    });
+    await state.undoTask;
+    previousFiles = await storedFiles();
+    previous = projectSnapshot(previousFiles);
+    wasDemo = state.models.some((model) => model.demo);
+    await replaceStoredFiles(project.files);
+    replaced = true;
+    await resetProjectScene();
+    await loadProjectReferences(project);
+    state.projectName = file.name.replace(/\.liraifc$/i, "") || project.name;
+    persist();
+    notify(
+      `Projekt öppnat · ${project.files.length} referenser med placeringar.`,
+    );
+  } catch (error) {
+    if (replaced) {
+      try {
+        await replaceStoredFiles(previousFiles);
+        await resetProjectScene();
+        if (wasDemo) {
+          state.loading = false;
+          await showDemo();
+          state.loading = true;
+        } else await loadProjectReferences(previous);
+        notify(`${error.message} Föregående projekt har återställts.`);
+      } catch {
+        notify(
+          `${error.message} Föregående filer finns i den lokala lagringen; starta om appen för att läsa dem igen.`,
+        );
+      }
+    } else notify(error.message);
+  } finally {
+    state.loading = false;
+    $("#loading").hidden = true;
+  }
+}
+
+async function resetProjectScene() {
+  state.projectName = "LiraIFC-projekt";
+  viewer.setTool("select");
+  viewer.clearMeasurements();
+  for (const model of [...state.models]) await removeModel(model, false);
+  state.selected.clear();
+  state.selectedBranches.clear();
+  state.hidden.clear();
+  state.expanded.clear();
+  state.props.clear();
+  state.isolated = null;
+  state.origin = null;
+  state.views = [];
+  state.query = "";
+  state.type = "";
+  state.limit = 150;
+  state.placementHistory = [];
+  state.showMoveUndo = false;
+  viewer.setSection({ ...viewer.section, mode: "none" });
+  $("#level-filter").value = "";
+  sessionStorage.removeItem(updateSnapshotKey);
+  setTab("models");
+  refresh();
+  toolState();
+  viewer.standardView("iso");
+  viewer.fit();
+}
 async function newProject() {
   if (state.loading) {
     notify("Vänta tills den pågående importen är klar.");
@@ -875,31 +1345,8 @@ async function newProject() {
     // Clear the local working copies atomically before clearing the scene.
     // Original files on disk are never modified.
     await clearStoredFiles();
-    viewer.setTool("select");
-    viewer.clearMeasurements();
-    for (const model of [...state.models]) await removeModel(model, false);
-    state.selected.clear();
-    state.selectedBranches.clear();
-    state.hidden.clear();
-    state.expanded.clear();
-    state.props.clear();
-    state.isolated = null;
-    state.origin = null;
-    state.views = [];
-    state.query = "";
-    state.type = "";
-    state.limit = 150;
-    state.placementHistory = [];
-    state.showMoveUndo = false;
-    viewer.setSection({ ...viewer.section, mode: "none" });
-    $("#level-filter").value = "";
-    sessionStorage.removeItem(updateSnapshotKey);
+    await resetProjectScene();
     persist();
-    setTab("models");
-    refresh();
-    toolState();
-    viewer.standardView("iso");
-    viewer.fit();
     notify("Nytt tomt projekt · Släpp IFC, DXF eller DWG i modellvyn.");
   } catch {
     notify("Kunde inte skapa ett nytt projekt. Försök igen.");
@@ -967,7 +1414,7 @@ async function showDemo() {
     $("#loading").hidden = true;
   }
 }
-async function importRecord(record, persistFile = true) {
+async function importRecord(record, persistFile = true, staged = false) {
   $("#loading").hidden = false;
   $("#loading-name").textContent = record.name;
   $("#loading-status").textContent = "Läser IFC och bygger geometri…";
@@ -980,7 +1427,7 @@ async function importRecord(record, persistFile = true) {
       notify("Modellen öppnas, men kunde inte sparas lokalt.");
     }
   if (/\.(dxf|dwg)$/i.test(record.name))
-    return importCadRecord(record, persistFile);
+    return importCadRecord(record, persistFile, staged);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./ifc.worker.js", import.meta.url), {
       type: "module",
@@ -1008,6 +1455,11 @@ async function importRecord(record, persistFile = true) {
           model.groupWarning = data.groupWarning;
           model.origin = data.origin;
           state.origin ||= data.origin;
+          if (staged) {
+            resolve(model);
+            return;
+          }
+          sourceMonitor.set(model.id, record.source);
           registerModel(model);
           refresh();
           viewer.fit();
@@ -1051,7 +1503,7 @@ async function importRecord(record, persistFile = true) {
     );
   });
 }
-async function importCadRecord(record, persistFile) {
+async function importCadRecord(record, persistFile, staged = false) {
   const format = record.name.split(".").at(-1).toUpperCase();
   $("#loading-status").textContent = `Läser ${format}-ritning…`;
   return new Promise((resolve, reject) => {
@@ -1102,7 +1554,12 @@ async function importCadRecord(record, persistFile) {
           placement,
           cadData: data,
         });
+        if (staged) {
+          resolve(model);
+          return;
+        }
         state.origin ||= origin;
+        sourceMonitor.set(model.id, record.source);
         registerModel(model);
         refresh();
         viewer.fit();
@@ -1125,20 +1582,29 @@ async function importCadRecord(record, persistFile) {
   });
 }
 let importQueue = Promise.resolve();
-function importFiles(files) {
+function importFiles(files, handles = new Map()) {
   const pendingFiles = [...files];
-  const pending = importQueue.then(() => importFilesNow(pendingFiles));
+  const pending = importQueue.then(() => importFilesNow(pendingFiles, handles));
   importQueue = pending.catch(() => {});
   return pending;
 }
-async function importFilesNow(files) {
+async function importFilesNow(files, handles = new Map()) {
   if (state.loading) {
     notify("Vänta tills den pågående importen är klar.");
     return;
   }
-  const valid = [...files].filter((f) => /\.(ifc|dxf|dwg)$/i.test(f.name));
+  const valid = [...files].filter((f) =>
+    /\.(ifc|dxf|dwg|liraifc)$/i.test(f.name),
+  );
+  if (valid.some((f) => /\.liraifc$/i.test(f.name))) {
+    if (valid.length !== 1) {
+      notify("Öppna ett projekt i taget, separat från modellfiler.");
+      return;
+    }
+    return openProject(valid[0]);
+  }
   if (!valid.length) {
-    notify("Välj IFC, DXF eller DWG.");
+    notify("Välj IFC, DXF, DWG eller ett LiraIFC-projekt.");
     return;
   }
   state.loading = true;
@@ -1152,6 +1618,10 @@ async function importFilesNow(files) {
         id: crypto.randomUUID(),
         name: file.name,
         size: file.size,
+        sourceStamp: fileStamp(file),
+        ...(handles.has(file)
+          ? { source: createFileSource(handles.get(file), file) }
+          : {}),
         buffer: await file.arrayBuffer(),
       });
     } catch (error) {
@@ -1163,9 +1633,24 @@ async function importFilesNow(files) {
   setTab("models");
   refresh();
   persist();
+  await sourceMonitor.check();
 }
 
 const actions = {
+  "link-source-folder": (button) => chooseSourceFolder(button.dataset.model),
+  "source-permission": (button) => grantSourcePermission(button.dataset.model),
+  "refresh-reference": (button) => {
+    button.disabled = true;
+    importQueue = importQueue
+      .then(() => refreshReference(button.dataset.model))
+      .catch((error) => notify(error.message));
+  },
+  "open-project": () => $("#project-input").click(),
+  "save-project": () => {
+    importQueue = importQueue
+      .then(saveProject)
+      .catch((error) => notify(error.message));
+  },
   "new-project": () => {
     importQueue = importQueue
       .then(newProject)
@@ -1541,6 +2026,10 @@ $(".inspector-tabs").addEventListener("keydown", (e) => {
   setTab(tabs[next].dataset.tab);
   tabs[next].focus();
 });
+$("#project-input").addEventListener("change", (e) => {
+  importFiles(e.target.files);
+  e.target.value = "";
+});
 $("#file-input").addEventListener("change", (e) => {
   importFiles(e.target.files);
   e.target.value = "";
@@ -1778,7 +2267,25 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   dragDepth = 0;
   $("#drop-zone").hidden = true;
-  importFiles(e.dataTransfer.files);
+  const captured = captureDroppedFiles(e.dataTransfer);
+  const pending = importQueue.then(async () => {
+    const { files, handles } = await captured;
+    const previousIds = new Set(state.models.map((model) => model.id));
+    await importFilesNow(files, handles);
+    if (files.some((file) => /\.(ifc|dwg|dxf)$/i.test(file.name))) {
+      const unlinked = state.models.filter(
+        (model) =>
+          !model.demo &&
+          !previousIds.has(model.id) &&
+          !sourceMonitor.links.has(model.id),
+      ).length;
+      if (unlinked)
+        notify(
+          `${unlinked} referenser öppnades utan direkt filkoppling. Koppla originalmapp för automatisk kontroll.`,
+        );
+    }
+  });
+  importQueue = pending.catch((error) => notify(error.message));
 });
 
 async function start() {
@@ -1896,5 +2403,7 @@ watchAppUpdate({
     );
   },
 });
-importQueue = start().catch((error) => notify(error.message));
+importQueue = start()
+  .then(() => sourceMonitor.check())
+  .catch((error) => notify(error.message));
 registerFileHandling({ openFiles: importFiles, onError: notify });

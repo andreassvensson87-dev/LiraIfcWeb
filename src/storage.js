@@ -20,12 +20,26 @@ async function transaction(mode, operation) {
 }
 export const storedFiles = () =>
   transaction("readonly", (store) => store.getAll());
+export const storedFile = (id) =>
+  transaction("readonly", (store) => store.get(id));
 export const storeFile = (file) =>
   transaction("readwrite", (store) => store.put(file));
 export const deleteFile = (id) =>
   transaction("readwrite", (store) => store.delete(id));
 export const clearStoredFiles = () =>
   transaction("readwrite", (store) => store.clear());
+export async function replaceStoredFiles(files) {
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("files", "readwrite");
+    const store = tx.objectStore("files");
+    store.clear();
+    for (const file of files) store.put(file);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
 export function readSettings() {
   try {
     return JSON.parse(localStorage.getItem("lira-ifc-settings")) || {};
@@ -40,6 +54,21 @@ export function saveSettings(settings) {
   } catch {
     return false;
   }
+}
+
+export async function storeSource(id, source) {
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("files", "readwrite");
+    const store = tx.objectStore("files"),
+      request = store.get(id);
+    request.onsuccess = () => {
+      if (request.result) store.put({ ...request.result, source });
+    };
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }
 
 export async function storePlacement(id, placement, unitConfirmed) {
