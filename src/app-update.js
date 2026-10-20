@@ -9,6 +9,15 @@ export function watchAppUpdate({
   const base = new URL(baseUrl, location.href);
   let available = null;
   let checking = null;
+  const show = () => {
+    button.hidden = false;
+    button.textContent = available ? "Uppdatera appen" : "Sök uppdatering";
+    button.classList.toggle("update-available", !!available);
+    button.title = available
+      ? "En ny version finns tillgänglig"
+      : "Kontrollera om det finns en ny version av LiraIFC";
+  };
+  show();
   const freshUrl = (file) => {
     const url = new URL(file, base);
     url.searchParams.set("check", Date.now());
@@ -26,9 +35,11 @@ export function watchAppUpdate({
         if (typeof version !== "string" || !version)
           throw new Error("Ogiltig version");
         available = version !== currentVersion ? version : null;
-        button.hidden = !available;
+        show();
+        return true;
       } catch {
-        // Network failures must not disturb the viewer or discard a detected update.
+        // Keep any detected update; report failures only after a manual check.
+        return false;
       } finally {
         checking = null;
       }
@@ -37,8 +48,17 @@ export function watchAppUpdate({
     if (button.disabled) return;
     button.disabled = true;
     try {
-      await check();
-      if (!available) return;
+      const checked = await check();
+      if (!checked) {
+        status(
+          "Kunde inte söka efter uppdateringar. Kontrollera anslutningen och försök igen.",
+        );
+        return;
+      }
+      if (!available) {
+        status("Du har den senaste versionen av LiraIFC.");
+        return;
+      }
       // Check that the new entry page is available before replacing the running app.
       const response = await fetch(freshUrl("index.html"), {
         cache: "no-store",

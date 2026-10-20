@@ -86,7 +86,7 @@ Det senaste bildförslaget fastställer placeringen av modellträdet och Liras f
 
 ## Appuppdateringar
 
-Toppfältets gröna Uppdatera appen visas när versionskontrollen hittar en ny publicerad version. Kontrollen görs vid start, när appen återfår fokus och var 15:e minut. Användaren startar uppdateringen med knappen; inga automatiska omladdningar. En pågående IFC-import måste bli klar först. Kamera, snitt, synlighet, markering och utseende återställs efter omladdningen; modeller och sparade vyer finns kvar i lokal lagring.
+Toppfältet visar alltid Sök uppdatering. När versionskontrollen hittar en ny publicerad version blir knappen grön och byter text till Uppdatera appen. Ett manuellt klick ger besked om senaste versionen redan körs eller om nätkontrollen misslyckas; misslyckad kontroll raderar inte en tidigare upptäckt uppdatering. Kontrollen görs vid start, när appen återfår fokus och var 15:e minut. Användaren startar uppdateringen med knappen; inga automatiska omladdningar. En pågående IFC-import måste bli klar först. Kamera, snitt, synlighet, markering och utseende återställs efter omladdningen; modeller och sparade vyer finns kvar i lokal lagring.
 
 Visa i objekt- och grenmenyn återvisar hela markeringen, även under isolering. Om modellen var släckt visas bara markerade objekt eller grenar; modellens övriga objekt förblir dolda.
 
@@ -159,3 +159,7 @@ Geometrins storlek eller filnamn används inte för att gissa enhet: en liten de
 Den installerade webbappen registrerar `.ifc` via manifestets `file_handlers`. Windows med Chrome/Edge kan då erbjuda LiraIFC i Öppna med och som standardapp för IFC. Användaren väljer själv standardapp i Windows. Webbläsaren kan be om tillåtelse att hantera filerna första gången. Registreringen kräver att den uppdaterade versionen har publicerats och att webbläsaren har uppdaterat den installerade appens manifest; vid behov installeras appen om.
 
 `launchQueue` skickar valda filer till samma lokala import som filväljaren. Pågående start/återställning och tidigare filimporter slutförs först. Flera valda IFC-filer importeras i ordning; en oläsbar fil hindrar inte övriga filer. Ett redan öppet appfönster återanvänds där webbläsaren stöder `focus-existing`. Ingen automatisk publicering eller ändring av operativsystemets standardapp görs. [Microsofts dokumentation om filhantering i PWA](https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/handle-files).
+
+## Nytt projekt
+
+Nytt projekt i toppfältet startar en tom arbetsyta utan demomodell. Aktuella referenser, tillfälliga mått, markeringar, filter, snitt, placeringshistorik och sparade projektvyer rensas. Modellerna och deras workers/GPU-resurser frigörs via den vanliga borttagningen. Lokala arbetskopior rensas i en IndexedDB-transaktion; originalfilerna på datorn ändras inte. Navigation och övriga personliga inställningar behålls. Åtgärden köas efter pågående filimport/återställning, och tomt projekt förblir tomt efter omladdning. Därefter används den vanliga filväljaren eller drag och släpp för att lägga till IFC, DWG och DXF.

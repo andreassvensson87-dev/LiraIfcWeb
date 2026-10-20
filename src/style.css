@@ -1474,13 +1474,33 @@ dialog .primary {
 }
 
 .header .lira-update {
-  background: #74d9b0;
-  color: #153a2e;
-  border: 1px solid #74d9b0;
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
   font-weight: 600;
   padding: 7px 10px;
   border-radius: 4px;
   white-space: nowrap;
+}
+.header .lira-update.update-available {
+  background: #74d9b0;
+  color: #153a2e;
+  border-color: #74d9b0;
+}
+.header .header-new-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid #486267;
+  padding: 7px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.header-new-project svg {
+  width: 16px;
+  height: 16px;
 }
 
 .selection-box {

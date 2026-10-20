@@ -40,6 +40,7 @@ import {
   storeFile,
   storePlacement,
   deleteFile,
+  clearStoredFiles,
   readSettings,
   saveSettings,
 } from "./storage.js";
@@ -77,7 +78,7 @@ $("#app").innerHTML = `
   <header class="header">
     <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="LiraIFC"><img src="${import.meta.env.BASE_URL}lira-icon.svg" alt=""/><strong>Lira<span>IFC</span></strong></a>
     <div class="header-divider"></div><span class="workspace-title">Modellgranskning</span><span class="viewer-badge">VIEWER</span>
-    <div class="header-right"><button id="app-update" class="lira-update" title="En ny version finns tillgänglig" hidden>Uppdatera appen</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna modell</button></div>
+    <div class="header-right"><button class="header-new-project" data-action="new-project" title="Börja med ett tomt projekt">${icon("plus")} Nytt projekt</button><button id="app-update" class="lira-update" title="Kontrollera om det finns en ny version av LiraIFC">Sök uppdatering</button><span class="local-status"><i></i> Lokalt på din enhet</span>${small("settings", "Inställningar", "settings", 'aria-haspopup="dialog" aria-controls="settings-dialog"')}${small("help", "Hjälp och kortkommandon", "help")}<button class="primary header-open" data-action="open">${icon("folder")} Öppna modell</button></div>
   </header>
   <nav class="ribbon" aria-label="Modellverktyg">
     <div class="ribbon-group"><div class="commands">${command("open", "Öppna modell", "folder")}${command("demo", "Demomodell", "models")}</div><span class="group-label">Modell</span></div>
@@ -861,6 +862,53 @@ async function removeModel(model, save = true) {
   refresh();
   toolState();
 }
+async function newProject() {
+  if (state.loading) {
+    notify("Vänta tills den pågående importen är klar.");
+    return;
+  }
+  state.loading = true;
+  const button = document.querySelector('[data-action="new-project"]');
+  button.disabled = true;
+  try {
+    await state.undoTask;
+    // Clear the local working copies atomically before clearing the scene.
+    // Original files on disk are never modified.
+    await clearStoredFiles();
+    viewer.setTool("select");
+    viewer.clearMeasurements();
+    for (const model of [...state.models]) await removeModel(model, false);
+    state.selected.clear();
+    state.selectedBranches.clear();
+    state.hidden.clear();
+    state.expanded.clear();
+    state.props.clear();
+    state.isolated = null;
+    state.origin = null;
+    state.views = [];
+    state.query = "";
+    state.type = "";
+    state.limit = 150;
+    state.placementHistory = [];
+    state.showMoveUndo = false;
+    viewer.setSection({ ...viewer.section, mode: "none" });
+    $("#level-filter").value = "";
+    sessionStorage.removeItem(updateSnapshotKey);
+    persist();
+    setTab("models");
+    refresh();
+    toolState();
+    viewer.standardView("iso");
+    viewer.fit();
+    notify("Nytt tomt projekt · Släpp IFC, DXF eller DWG i modellvyn.");
+  } catch {
+    notify("Kunde inte skapa ett nytt projekt. Försök igen.");
+  } finally {
+    state.loading = false;
+    button.disabled = false;
+    $("#loading").hidden = true;
+  }
+}
 async function showDemo() {
   if (state.loading) return;
   state.loading = true;
@@ -1118,6 +1166,11 @@ async function importFilesNow(files) {
 }
 
 const actions = {
+  "new-project": () => {
+    importQueue = importQueue
+      .then(newProject)
+      .catch((error) => notify(error.message));
+  },
   open: () => $("#file-input").click(),
   demo: showDemo,
   fit: () => viewer.fit(),

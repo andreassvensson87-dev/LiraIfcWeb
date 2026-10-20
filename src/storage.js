@@ -24,6 +24,8 @@ export const storeFile = (file) =>
   transaction("readwrite", (store) => store.put(file));
 export const deleteFile = (id) =>
   transaction("readwrite", (store) => store.delete(id));
+export const clearStoredFiles = () =>
+  transaction("readwrite", (store) => store.clear());
 export function readSettings() {
   try {
     return JSON.parse(localStorage.getItem("lira-ifc-settings")) || {};
